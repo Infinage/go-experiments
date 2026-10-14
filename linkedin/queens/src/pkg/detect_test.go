@@ -74,7 +74,7 @@ func Test_Detect(t *testing.T) {
 			t.Fatal("PNG decode fail: ", err)
 		}
 
-		board, err := DetectBoard(img)
+		board, err := NewBoardFromImage(img)
 		if tt.err == "" && err != nil {
 			t.Fatal("Unexpected error: ", err)
 		} else if tt.err != "" && err == nil {

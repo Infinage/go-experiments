@@ -21,9 +21,10 @@ const (
 )
 
 type Board struct {
-	img  image.Image
-	bbox image.Rectangle
-	grid [][]int
+	img      image.Image
+	bbox     image.Rectangle
+	grid     [][]int
+	solution [][]bool
 }
 
 // almostEq returns true if values a and b are close to each
@@ -195,9 +196,9 @@ func constructGrid(img image.Image, region []image.Rectangle, rows int) [][]int 
 	return grid
 }
 
-// DetectBoard parses the input image and returns a struct containing detected
+// NewBoardFromImage parses the input image and returns a struct containing detected
 // queens board along with the textual representation of it.
-func DetectBoard(img image.Image) (Board, error) {
+func NewBoardFromImage(img image.Image) (Board, error) {
 	cache := make(imageCache)
 	var regions [][]image.Rectangle
 
