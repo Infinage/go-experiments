@@ -66,13 +66,12 @@ func solve(row, col int, grid [][]int, solution [][]bool, regions map[int][][2]i
 	return solve(row, col+1, grid, solution, regions)
 }
 
-// Solve derives a solution for the input queens puzzle and paints
-// 'X's on image to denote queens placement. It returns an error if
-// no solution is available.
+// Solve derives a solution for the input queens puzzle. It
+// returns an error if no solution is available.
 func (b *Board) Solve() error {
 	size := len(b.grid)
 	if size <= 4 {
-		fmt.Errorf("got %d rows (want > 4)", len(b.grid))
+		return fmt.Errorf("got %d rows (want > 4)", len(b.grid))
 	}
 
 	coloredRegions := make(map[int][][2]int)

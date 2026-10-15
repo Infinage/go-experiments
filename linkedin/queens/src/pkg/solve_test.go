@@ -1,7 +1,7 @@
 package queens
 
 import (
-	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -21,7 +21,7 @@ func Test_BoardSolve(t *testing.T) {
 				{5, 7, 5, 6, 6, 3, 3},
 				{5, 7, 7, 7, 6, 6, 3},
 			},
-			solution: [][]bool {
+			solution: [][]bool{
 				{false, false, false, true, false, false, false},
 				{true, false, false, false, false, false, false},
 				{false, false, false, false, true, false, false},
@@ -31,24 +31,59 @@ func Test_BoardSolve(t *testing.T) {
 				{false, false, false, false, false, true, false},
 			},
 		},
+		{
+			grid: [][]int{
+				{1, 1, 1, 2},
+				{5, 5, 5, 6},
+				{5, 7, 5, 6},
+				{5, 7, 7, 7},
+			},
+			err: "got 4 rows (want > 4)",
+		},
+		{
+			grid: [][]int{
+				{1, 2, 2, 2, 2},
+				{1, 1, 3, 4, 2},
+				{1, 1, 3, 4, 2},
+				{4, 4, 4, 4, 2},
+				{5, 5, 4, 4, 2},
+			},
+			solution: [][]bool{
+				{false, false, false, false, true},
+				{false, false, true, false, false},
+				{true, false, false, false, false},
+				{false, false, false, true, false},
+				{false, true, false, false, false},
+			},
+		},
+		{
+			grid: [][]int{
+				{1, 2, 2, 2, 1},
+				{1, 1, 3, 4, 2},
+				{1, 1, 3, 4, 2},
+				{4, 4, 4, 4, 2},
+				{5, 5, 4, 4, 2},
+			},
+			err: "no solution available",
+		},
 	}
 
 	for _, tt := range tests {
 		b := Board{grid: tt.grid}
-		if err := b.Solve(); err != nil {
+		if err := b.Solve(); tt.err == "" && err != nil {
 			t.Fatalf("Unexpected error: %v", err)
+		} else if tt.err != "" && err == nil {
+			t.Fatalf("Expected %q error, but passed", tt.err)
+		} else if err != nil && tt.err != err.Error() {
+			t.Fatalf("Expected %q error, got %q", tt.err, err.Error())
 		}
 
-		for _, row := range b.solution {
-			for _, b := range row {
-				val := 0
-				if b {
-					val = 1
-				}
-				fmt.Printf("%d ", val)
-			}
-			fmt.Println()
+		if tt.err != "" {
+			return
 		}
-		t.Fail()
+
+		if !reflect.DeepEqual(tt.solution, b.solution) {
+			t.Errorf("Solution mismatched\nWant:\n%v\nGot:\n%v", tt.solution, b.solution)
+		}
 	}
 }

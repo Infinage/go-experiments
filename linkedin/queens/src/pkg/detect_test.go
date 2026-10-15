@@ -84,6 +84,11 @@ func Test_Detect(t *testing.T) {
 			t.Fatalf("Expected error: %q, got %q", tt.err, err.Error())
 		}
 
+		// Skip other checks in case the test is err only
+		if tt.err != "" {
+			return
+		}
+
 		// Assertion checks on the bounding box
 		if want, got := tt.bbox.Dx(), board.bbox.Dx(); !almostEq(want, got, 5) {
 			t.Errorf("bounding box size mismatched, want %d, got %d", want, got)
