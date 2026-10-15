@@ -60,49 +60,77 @@ func Test_Detect(t *testing.T) {
 			fpath: "screenshots/4.png",
 			err:   "no valid board detected",
 		},
+		{
+			fpath: "screenshots/5.png",
+			bbox:  image.Rect(160, 153, 451, 444),
+			grid: [][]int{
+				{1, 1, 1, 2, 3, 4},
+				{1, 1, 1, 2, 3, 4},
+				{2, 2, 2, 2, 3, 4},
+				{2, 2, 5, 3, 3, 4},
+				{6, 5, 5, 3, 3, 4},
+				{6, 6, 5, 5, 3, 3},
+			},
+		},
+		{
+			fpath: "screenshots/6.png",
+			bbox:  image.Rect(489, 83, 1102, 697),
+			grid: [][]int{
+				{1, 1, 1, 1, 2, 2, 2, 2},
+				{1, 3, 3, 1, 2, 2, 2, 2},
+				{3, 3, 3, 1, 2, 2, 4, 2},
+				{3, 3, 3, 1, 1, 4, 4, 4},
+				{3, 5, 5, 1, 1, 4, 4, 4},
+				{5, 5, 5, 5, 5, 4, 6, 6},
+				{7, 7, 5, 5, 6, 6, 6, 8},
+				{7, 7, 5, 5, 6, 6, 6, 8},
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		f, err := testScreenshots.Open(tt.fpath)
-		if err != nil {
-			t.Fatal("Open fail: %")
-		}
+		t.Run(tt.fpath, func(t *testing.T) {
+			f, err := testScreenshots.Open(tt.fpath)
+			if err != nil {
+				t.Fatal("Open fail: ", err)
+			}
 
-		img, err := png.Decode(f)
-		f.Close()
-		if err != nil {
-			t.Fatal("PNG decode fail: ", err)
-		}
+			img, err := png.Decode(f)
+			f.Close()
+			if err != nil {
+				t.Fatal("PNG decode fail: ", err)
+			}
 
-		board, err := NewBoardFromImage(img)
-		if tt.err == "" && err != nil {
-			t.Fatal("Unexpected error: ", err)
-		} else if tt.err != "" && err == nil {
-			t.Log(board)
-			t.Fatal("Expected error, but passed")
-		} else if err != nil && tt.err != err.Error() {
-			t.Fatalf("Expected error: %q, got %q", tt.err, err.Error())
-		}
+			board, err := NewBoardFromImage(img)
+			if tt.err == "" && err != nil {
+				t.Fatal("Unexpected error: ", err)
+			} else if tt.err != "" && err == nil {
+				t.Log(board)
+				t.Fatal("Expected error, but passed")
+			} else if err != nil && tt.err != err.Error() {
+				t.Fatalf("Expected error: %q, got %q", tt.err, err.Error())
+			}
 
-		// Skip other checks in case the test is err only
-		if tt.err != "" {
-			return
-		}
+			// Skip other checks in case the test is err only
+			if tt.err != "" {
+				return
+			}
 
-		// Assertion checks on the bounding box
-		if want, got := tt.bbox.Dx(), board.bbox.Dx(); !almostEq(want, got, 5) {
-			t.Errorf("bounding box size mismatched, want %d, got %d", want, got)
-		}
-		if want, got := tt.bbox.Min.X, board.bbox.Min.X; !almostEq(want, got, 5) {
-			t.Errorf("start X mismatched, want %d, got %d", want, got)
-		}
-		if want, got := tt.bbox.Min.Y, board.bbox.Min.Y; !almostEq(want, got, 5) {
-			t.Errorf("start Y mismatched, want %d, got %d", want, got)
-		}
+			// Assertion checks on the bounding box
+			if want, got := tt.bbox.Dx(), board.bbox.Dx(); !almostEq(want, got, 5) {
+				t.Errorf("bounding box size mismatched, want %d, got %d", want, got)
+			}
+			if want, got := tt.bbox.Min.X, board.bbox.Min.X; !almostEq(want, got, 5) {
+				t.Errorf("start X mismatched, want %d, got %d", want, got)
+			}
+			if want, got := tt.bbox.Min.Y, board.bbox.Min.Y; !almostEq(want, got, 5) {
+				t.Errorf("start Y mismatched, want %d, got %d", want, got)
+			}
 
-		// Validate grid matches every cell for cell
-		if !reflect.DeepEqual(tt.grid, board.grid) {
-			t.Errorf("Grid mismatched\nWant:\n%v\nGot:\n%v", tt.grid, board.grid)
-		}
+			// Validate grid matches every cell for cell
+			if !reflect.DeepEqual(tt.grid, board.grid) {
+				t.Errorf("Grid mismatched\nWant:\n%v\nGot:\n%v", tt.grid, board.grid)
+			}
+		})
 	}
 }

@@ -79,7 +79,7 @@ func isColoredEmptySquare(img image.Image, x, y int, cache imageCache) (int, boo
 
 	// Sometimes borders can mess things up, a threshold is better. Also
 	// regions smaller than 15 pixels are too tiny to be our regions of interest
-	if !almostEq(rowSize, colSize, 3) || rowSize < 15 || colSize < 15 {
+	if !almostEq(rowSize, colSize, 5) || rowSize < 15 || colSize < 15 {
 		return 0, false
 	}
 
