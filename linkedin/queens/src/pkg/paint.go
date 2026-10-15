@@ -29,34 +29,34 @@ func markX(img draw.Image, x, y, size, thickness int) error {
 	return nil
 }
 
-// Paint draws 'X' on points where queen can be safely placed.
-func (b *Board) Paint() error {
+// Paint returns the cropped game board image from input and draws
+// 'X' on points where queen can be safely placed.
+func (b *Board) Paint() (image.Image, error) {
 	if b.img == nil {
-		return fmt.Errorf("image not set")
+		return nil, fmt.Errorf("image not set")
 	}
 
-	dImg, ok := b.img.(draw.Image)
-	if !ok {
-		return fmt.Errorf("non editable")
-	}
+	// Create a copy of the original image.
+	canvas := image.NewRGBA(image.Rect(0, 0, b.bbox.Dx(), b.bbox.Dy()))
+	draw.Draw(canvas, canvas.Bounds(), b.img, b.bbox.Min, draw.Src)
 
 	size := len(b.solution)
 	if size == 0 {
-		return fmt.Errorf("not solved yet")
+		return nil, fmt.Errorf("not solved yet")
 	}
 
 	boxSize := b.bbox.Dx() / size
 	for rowIdx, row := range b.solution {
 		for colIdx, marked := range row {
 			if marked {
-				cx := b.bbox.Min.X + colIdx*boxSize + boxSize/2
-				cy := b.bbox.Min.Y + rowIdx*boxSize + boxSize/2
-				if err := markX(dImg, cx, cy, boxSize/3, 3); err != nil {
-					return fmt.Errorf("mark [%d, %d]: %w", rowIdx, colIdx, err)
+				cx := colIdx*boxSize + boxSize/2
+				cy := rowIdx*boxSize + boxSize/2
+				if err := markX(canvas, cx, cy, boxSize/3, 3); err != nil {
+					return nil, fmt.Errorf("mark [%d, %d]: %w", rowIdx, colIdx, err)
 				}
 			}
 		}
 	}
 
-	return nil
+	return canvas, nil
 }

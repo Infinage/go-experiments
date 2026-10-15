@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="assets/index.css">
+  <script src="assets/datastar.js" type="module" defer></script>
+</head>
+<body class="bg-gray-900 flex h-screen items-center flex-col gap-4">
+  <h1 class="text-5xl font-semibold text-gray-200 mt-8 mb-4">Queens Puzzle Solver</h1>
+  <span class="text-sm text-gray-400">Paste from clipboard or upload an image.</span>
+  <div class="flex gap-2">
+    <form enctype="multipart/form-data">
+      <input type="file" name="upload" accept=".png" 
+        data-on:change="@post('/api/solve', {contentType: 'form'})"
+        class="text-gray-400 text-sm file:text-gray-200 file:bg-slate-600 file:px-4 file:py-1 
+          file:rounded-md file:font-semibold file:cursor-pointer hover:file:bg-slate-700 
+          file:mr-2
+        "
+      />
+    </form>
+  </div>
+
+  <span data-attr:hidden="$_error === ''" data-text="$_error" 
+    class="text-red-400 italic mt-4"
+  ></span>
+
+  <canvas id="result"
+    class="max-w-full h-auto rounded-md"
+    data-attr:hidden="!$_result"
+    data-effect="
+      if ($_result) {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.getElementById('result');
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+        };
+        img.src = $_result;
+      }
+    "
+  ></canvas>
+</body>
+</html>
