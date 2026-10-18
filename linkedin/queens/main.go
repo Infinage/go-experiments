@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"image/png"
+	"image"
+	_ "image/jpeg"
+	png "image/png"
 	"log"
 	"net/http"
 
@@ -49,9 +51,9 @@ func routes(tmpl *template.Template) *http.ServeMux {
 		sse := datastar.NewSSE(w, r)
 		data := map[string]string{"_error": "", "_result": ""}
 
-		img, err := png.Decode(file)
+		img, format, err := image.Decode(file)
 		if err != nil {
-			data["_error"] = fmt.Sprintf("png decode: %v", err)
+			data["_error"] = fmt.Sprintf("image decode [%s]: %v", format, err)
 			sse.MarshalAndPatchSignals(data)
 			return
 		}

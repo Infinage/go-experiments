@@ -3,9 +3,11 @@ package queens
 import (
 	"embed"
 	"image"
-	"image/png"
 	"reflect"
 	"testing"
+
+	_ "image/jpeg"
+	_ "image/png"
 )
 
 //go:embed screenshots/*
@@ -33,6 +35,18 @@ func Test_Detect(t *testing.T) {
 		},
 		{
 			fpath: "screenshots/2.png",
+			bbox:  image.Rect(671, 182, 1232, 744),
+			grid: [][]int{
+				{1, 1, 1, 2, 2, 2},
+				{1, 1, 1, 2, 2, 2},
+				{1, 1, 1, 1, 3, 2},
+				{4, 5, 1, 6, 3, 2},
+				{4, 5, 1, 6, 6, 2},
+				{4, 4, 1, 1, 1, 1},
+			},
+		},
+		{
+			fpath: "screenshots/2.jpg",
 			bbox:  image.Rect(671, 182, 1232, 744),
 			grid: [][]int{
 				{1, 1, 1, 2, 2, 2},
@@ -95,10 +109,10 @@ func Test_Detect(t *testing.T) {
 				t.Fatal("Open fail: ", err)
 			}
 
-			img, err := png.Decode(f)
+			img, format, err := image.Decode(f)
 			f.Close()
 			if err != nil {
-				t.Fatal("PNG decode fail: ", err)
+				t.Fatalf("Image decode fail [%s]: %v", format, err)
 			}
 
 			board, err := NewBoardFromImage(img)
