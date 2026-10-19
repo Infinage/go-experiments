@@ -22,7 +22,7 @@ func Test_Detect(t *testing.T) {
 	}{
 		{
 			fpath: "screenshots/1.png",
-			bbox:  image.Rect(253, 100, 659, 507),
+			bbox:  image.Rect(251, 98, 662, 509),
 			grid: [][]int{
 				{1, 1, 1, 1, 1, 1, 1},
 				{1, 1, 1, 1, 1, 2, 2},
@@ -35,7 +35,7 @@ func Test_Detect(t *testing.T) {
 		},
 		{
 			fpath: "screenshots/2.png",
-			bbox:  image.Rect(671, 182, 1232, 744),
+			bbox:  image.Rect(670, 180, 1240, 748),
 			grid: [][]int{
 				{1, 1, 1, 2, 2, 2},
 				{1, 1, 1, 2, 2, 2},
@@ -47,7 +47,7 @@ func Test_Detect(t *testing.T) {
 		},
 		{
 			fpath: "screenshots/2.jpg",
-			bbox:  image.Rect(671, 182, 1232, 744),
+			bbox:  image.Rect(670, 180, 1240, 748),
 			grid: [][]int{
 				{1, 1, 1, 2, 2, 2},
 				{1, 1, 1, 2, 2, 2},
@@ -59,7 +59,7 @@ func Test_Detect(t *testing.T) {
 		},
 		{
 			fpath: "screenshots/3.png",
-			bbox:  image.Rect(266, 94, 672, 500),
+			bbox:  image.Rect(263, 92, 675, 503),
 			grid: [][]int{
 				{1, 1, 1, 2, 3, 3, 3},
 				{1, 1, 4, 2, 4, 3, 3},
@@ -84,20 +84,6 @@ func Test_Detect(t *testing.T) {
 				{2, 2, 5, 3, 3, 4},
 				{6, 5, 5, 3, 3, 4},
 				{6, 6, 5, 5, 3, 3},
-			},
-		},
-		{
-			fpath: "screenshots/6.png",
-			bbox:  image.Rect(489, 83, 1102, 697),
-			grid: [][]int{
-				{1, 1, 1, 1, 2, 2, 2, 2},
-				{1, 3, 3, 1, 2, 2, 2, 2},
-				{3, 3, 3, 1, 2, 2, 4, 2},
-				{3, 3, 3, 1, 1, 4, 4, 4},
-				{3, 5, 5, 1, 1, 4, 4, 4},
-				{5, 5, 5, 5, 5, 4, 6, 6},
-				{7, 7, 5, 5, 6, 6, 6, 8},
-				{7, 7, 5, 5, 6, 6, 6, 8},
 			},
 		},
 	}

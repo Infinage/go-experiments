@@ -3,6 +3,7 @@ package queens
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"slices"
 
 	"github.com/anthonynsimon/bild/effect"
@@ -89,10 +90,10 @@ func cleanGaps(values []int) []int {
 			var accountsFor int
 			gap := values[j] - values[i]
 			for k := range len(values) - j {
-				target := values[j]+(gap*k)
+				target := values[j] + (gap * k)
 				pos, ok := slices.BinarySearch(values, target)
-				if ok || 
-					(pos > 0 && almostEq(values[pos - 1], target, 5)) || 
+				if ok ||
+					(pos > 0 && almostEq(values[pos-1], target, 5)) ||
 					(pos < len(values) && almostEq(values[pos], target, 5)) {
 					accountsFor++
 				}
@@ -129,45 +130,72 @@ func cleanGaps(values []int) []int {
 		currentTotal += gi[0]
 		frequency += gi[1]
 	}
-	mergedGapItems = append(mergedGapItems, [2]int{currentTotal / currentCount,
-		frequency})
+
+	// Append any leftovers
+	if len(gapItems) > 0 {
+		mergedGapItems = append(mergedGapItems, [2]int{currentTotal / currentCount,
+			frequency})
+	}
+
+	// Possible that that no merge candiates were available
+	if len(mergedGapItems) == 0 {
+		return nil
+	}
 
 	// Most commonly occuring gap
 	gap := slices.MaxFunc(mergedGapItems, func(a, b [2]int) int { return a[1] - b[1] })[0]
 
-	// Determine the starting candidate for the given gap
-	bestCandidate := [2]int{-1, 0}
+	// Find the longest contiguous sequence that match the required gap
+	var bestSequence []int
 	for i := range values {
-		var score int
-		for j := range len(values) - i {
-			target := values[i]+(gap*j)
-			pos, ok := slices.BinarySearch(values, target)
-			if ok ||
-				(pos > 0 && almostEq(values[pos - 1], target, 5)) || 
-				(pos < len(values) && almostEq(values[pos], target, 5)) {
-				score++
+		curr := values[i]
+		seq := []int{curr}
+		for j := i + 1; j < len(values); j++ {
+			if almostEq(values[j], curr+gap, 5) {
+				seq = append(seq, values[j])
+				curr = values[j]
 			}
 		}
-		if bestCandidate[1] < score {
-			bestCandidate = [2]int{i, score}
+		if len(seq) > len(bestSequence) {
+			bestSequence = seq
 		}
 	}
 
-	// Remove edges that do not confirm
-	start, keep := values[bestCandidate[0]], 0
-	for i := range values {
-		mod := (values[i] - start) % gap
-		if mod < 0 {
-			mod += gap
-		}
-		if mod < 10 || gap-mod < 10 {
-			values[keep] = values[i]
-			keep++
+	return bestSequence
+}
+
+// newGridFromImage constructs textual representation of the grid
+// given the coordinates.
+func newGridFromImage(img image.Image, xs, ys []int) ([][]int, error) {
+	// Init empty grid (edges - 1)
+	N := len(xs)
+	grid := make([][]int, N-1)
+	for i := range grid {
+		grid[i] = make([]int, N-1)
+	}
+
+	colors := make(map[color.Color]int)
+	for j := range N - 1 {
+		for i := range N - 1 {
+			xm := (xs[i] + xs[i+1]) / 2
+			ym := (ys[j] + ys[j+1]) / 2
+
+			key, ok := colors[img.At(xm, ym)]
+			if !ok {
+				key = len(colors) + 1
+				colors[img.At(xm, ym)] = key
+			}
+
+			grid[j][i] = key
 		}
 	}
 
-	values = values[:keep]
-	return values
+	if len(colors) != N-1 {
+		return nil, fmt.Errorf("colors [%d] != grid dimensions [%d]",
+			len(colors), N-1)
+	}
+
+	return grid, nil
 }
 
 // NewBoardFromImage parses the input image and returns a struct containing detected
@@ -180,21 +208,16 @@ func NewBoardFromImage(img image.Image) (Board, error) {
 	ym := make(map[int]int)
 
 	// Conver pixel to grayscale and count pixels greater than threshold
-	intensityThreshold := uint8(128)
+	intensityThreshold := uint8(180)
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			r, g, b, _ := imgSobel.At(x, y).RGBA()
 
 			// Convert the 16-bit down to standard 8-bit
-			r8 := uint8(r >> 8)
-			g8 := uint8(g >> 8)
-			b8 := uint8(b >> 8)
-
-			// Calculate standard grayscale luma intensity
-			gray := uint8(0.299*float64(r8) + 0.587*float64(g8) + 0.114*float64(b8))
+			m := max(r, g, b) >> 8
 
 			// If it clears the threshold, save coordinates
-			if gray > intensityThreshold {
+			if uint8(m) > intensityThreshold {
 				xm[x]++
 				ym[y]++
 			}
@@ -226,14 +249,43 @@ func NewBoardFromImage(img image.Image) (Board, error) {
 
 	// Do a gap analysis and prune out edges that cannot be explained
 	xs, ys = cleanGaps(xs), cleanGaps(ys)
-
-	for _, x := range xs {
-		fmt.Println(x)
-	}
-	fmt.Println()
-	for _, y := range ys {
-		fmt.Println(y)
+	if len(xs) == 0 || len(ys) == 0 {
+		return Board{}, fmt.Errorf("no valid board detected")
 	}
 
-	return Board{}, nil
+	// Queens is a square shaped puzzle, in case of size differences
+	// add edge shorted axis based on the direction with higher intensity
+	switch {
+	case len(xs) < len(ys):
+		gap := xs[1] - xs[0]
+		left, right := xs[0]-gap, xs[len(xs)-1]+gap
+		if xm[left] > xm[right] {
+			xs = append([]int{left}, xs...)
+		} else {
+			xs = append(xs, right)
+		}
+
+	case len(xs) > len(ys):
+		gap := ys[1] - ys[0]
+		top, bottom := ys[0]-gap, ys[len(ys)-1]+gap
+		if ym[top] > ym[bottom] {
+			ys = append([]int{top}, ys...)
+		} else {
+			ys = append(ys, bottom)
+		}
+	}
+
+	// Length difference greater than one edge
+	if len(xs) != len(ys) {
+		return Board{}, fmt.Errorf("no valid board detected")
+	}
+
+	grid, err := newGridFromImage(img, xs, ys)
+	if err != nil {
+		return Board{}, fmt.Errorf("newGridFromImage: %w", err)
+	}
+
+	bbox := image.Rect(xs[0], ys[0], xs[len(xs)-1], ys[len(ys)-1])
+
+	return Board{img: img, bbox: bbox, grid: grid}, nil
 }
