@@ -1,105 +1,92 @@
 package main
 
 import (
-	"fmt"
+	"embed"
+	"errors"
+	"html/template"
 	"image"
+	"image/draw"
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
-
-	"github.com/signintech/gopdf"
+	"log"
+	"net/http"
 )
 
-const A4Padding = 10
+//go:embed assets/*
+var assets embed.FS
 
-type ImagePlacement struct {
-	Rotate90 bool
-	Height   float64
-	Width    float64
-}
-
-// getImagePlacement checks the optimal placement
-// to make for a given image into an A4 page.
-func getImagePlacement(imgW, imgH int, targetW, targetH float64) ImagePlacement {
-	// Align larger of two sides against height
-	scaleH := (targetH - 2*A4Padding) / float64(max(imgW, imgH))
-
-	// Align smaller of two sides against width
-	scaleW := (targetW - 2*A4Padding) / float64(min(imgW, imgH))
-
-	// Actual scale needs to ensure that image still fits in
-	scale := min(scaleH, scaleW)
-
-	return ImagePlacement{
-		Rotate90: imgW > imgH,
-		Height:   float64(imgH) * scale,
-		Width:    float64(imgW) * scale,
+// handleAPIMerge parses the incoming request containing images, merges the
+// images into a PDF and serves the PDF for download.
+func handleAPIMerge(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "Error parsing form: "+err.Error(), http.StatusBadRequest)
+		return
 	}
-}
+	defer r.MultipartForm.RemoveAll()
 
-func images2pdf(opath string, images []string) error {
-	pdf := gopdf.GoPdf{}
-	pageSize := *gopdf.PageSizeA4
-	pdf.Start(gopdf.Config{PageSize: pageSize})
-
-	for idx, fname := range images {
-		f, err := os.Open(fname)
-		if err != nil {
-			return fmt.Errorf("read %q [#%d]: %w", fname, idx+1, err)
-		}
-
-		config, _, err := image.DecodeConfig(f)
-		f.Close()
-		if err != nil {
-			return fmt.Errorf("decode %q [#%d]: %w", fname, idx+1, err)
-		}
-
-		pdf.AddPage()
-		placement := getImagePlacement(config.Width, config.Height,
-			pageSize.W, pageSize.H)
-
-		// Image height and width
-		rect := &gopdf.Rect{W: placement.Width, H: placement.Height}
-
-		if !placement.Rotate90 {
-			err = pdf.Image(fname, A4Padding, A4Padding, rect)
-			if err != nil {
-				return fmt.Errorf("write %q [#%d]: %w", fname, idx+1, err)
-			}
-			continue
-		}
-
-		// Rotate at the center of the PDF
-		centerX := pageSize.W / 2
-		centerY := pageSize.H / 2
-		pdf.Rotate(90, centerX, centerY)
-
-		// Start drawing at the top left leaving as much space needed
-		// for padding and for the image width itself
-		offsetY := centerY - (pageSize.W / 2) + A4Padding
-		offsetX := centerX + (pageSize.H / 2) - A4Padding - placement.Width
-
-		if err = pdf.Image(fname, offsetX, offsetY, rect); err != nil {
-			return fmt.Errorf("write %q [#%d]: %w", fname, idx+1, err)
-		}
-
-		// Reset rotation
-		pdf.RotateReset()
-	}
-
-	// Flush all content into PDF
-	pdf.WritePdf(opath)
-	return nil
-}
-
-func main() {
-	if len(os.Args) <= 2 {
-		fmt.Println("Usage img2pdf <output> <image1> [<image2>, [<image3>, ...]]")
+	files := r.MultipartForm.File["images"]
+	if len(files) == 0 {
+		http.Error(w, "No files uploaded", http.StatusBadRequest)
 		return
 	}
 
-	if err := images2pdf(os.Args[1], os.Args[2:]); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	var images []image.Image
+	for _, fileHeader := range files {
+		file, err := fileHeader.Open()
+		if err != nil {
+			http.Error(w, "Error reading file contents: "+err.Error(),
+				http.StatusInternalServerError)
+			return
+		}
+
+		image2Merge, _, err := image.Decode(file)
+		file.Close()
+		if err != nil {
+			http.Error(w, "Error decoding file content as image: "+err.Error(),
+				http.StatusBadRequest)
+			return
+		}
+
+		// Rewrite all images to standard 8 bit RGBA canvas
+		bounds := image2Merge.Bounds()
+		img8bit := image.NewRGBA(bounds)
+		draw.Draw(img8bit, bounds, image2Merge, bounds.Min, draw.Src)
+		images = append(images, img8bit)
+	}
+
+	pdfWriter, err := images2pdf(images)
+	if err != nil {
+		http.Error(w, "Merge PDF fail: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", "attachment; filename=merged.pdf")
+	_, err = pdfWriter.WriteTo(w)
+	if err != nil {
+		log.Println("File write to response failed: ", err)
+	}
+}
+
+func main() {
+	templ, err := template.ParseFS(assets, "assets/index.html")
+	if err != nil {
+		log.Fatal("Template parse: ", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /assets/", http.FileServerFS(assets))
+	mux.HandleFunc("POST /api/merge", handleAPIMerge)
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		err := templ.Execute(w, nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
+
+	err = http.ListenAndServe(":8080", mux)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal("Server error: ", err)
 	}
 }
