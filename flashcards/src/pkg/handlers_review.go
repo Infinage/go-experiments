@@ -93,8 +93,8 @@ func (s *Server) renderReview(w http.ResponseWriter, r *http.Request, sess *sess
 	}
 	c := rv.queue[rv.idx]
 	s.patchMain(w, r, "review", map[string]any{
-		"Tag": rv.tag, "Idx": rv.idx, "Pos": rv.idx + 1, 
-		"Total": len(rv.queue), "Prompt": c.Prompt, 
+		"Tag": rv.tag, "Idx": rv.idx, "Pos": rv.idx + 1,
+		"Total": len(rv.queue), "Prompt": c.Prompt,
 		"Answer": c.Answer, "Revealed": revealed,
 	})
 }

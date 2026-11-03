@@ -80,3 +80,19 @@ func TestParseCSVParsesTags(t *testing.T) {
 		t.Errorf("username = %q, want %q", cards[0].Username, "alice")
 	}
 }
+
+func TestParseBulkIDs(t *testing.T) {
+	sg := map[string]any{"pick_1": true, "pick_2": false, "pick_10": true, "other": true, "pick_x": true}
+	got := parseBulkIDs(sg)
+	if len(got) != 2 || got[0] != 1 && got[1] != 10 && got[0] != 10 && got[1] != 1 {
+		t.Errorf("parseBulkIDs = %v, want ids 1 and 10 in some order", got)
+	}
+}
+
+func TestOwnedIDs(t *testing.T) {
+	cards := []Card{{ID: 1}, {ID: 3}}
+	got := ownedIDs(cards, []int64{1, 2, 3, 1})
+	if len(got) != 3 || got[0] != 1 || got[1] != 3 || got[2] != 1 {
+		t.Errorf("ownedIDs = %v, want [1 3 1] (foreign id 2 dropped)", got)
+	}
+}

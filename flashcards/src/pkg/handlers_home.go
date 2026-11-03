@@ -34,10 +34,10 @@ func (s *Server) buildHome(r *http.Request, user, flash string) (map[string]any,
 	views := make([]map[string]any, 0, len(tags))
 	for _, t := range tags {
 		views = append(views, map[string]any{
-			"Name": t.Name, 
-			"Due": t.Due, 
-			"Total": t.Total, 
-			"Q": url.QueryEscape(t.Name),
+			"Name":  t.Name,
+			"Due":   t.Due,
+			"Total": t.Total,
+			"Q":     url.QueryEscape(t.Name),
 		})
 	}
 

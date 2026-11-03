@@ -71,6 +71,10 @@
       >Add card</button>
       <button
         class="rounded border border-slate-300 bg-white px-4 py-2 hover:bg-slate-100"
+        data-on:click="@get('/cards')"
+      >Your cards</button>
+      <button
+        class="rounded border border-slate-300 bg-white px-4 py-2 hover:bg-slate-100"
         data-on:click="@get('/cards/import')"
       >Import CSV</button>
     </div>
@@ -210,6 +214,108 @@
         class="text-sm underline"
         data-on:click="@get('/home')"
       >Stop</button>
+    </div>
+  </section>
+{{ end }}
+
+{{ define "cardslist" }}
+  <section
+    id="main"
+    class="space-y-4"
+    data-signals="{ {{range $i, $c := .Cards}}{{if $i}}, {{end}}confirm_{{$c.ID}}: false{{end}} }"
+  >
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">Your cards</h1>
+      <button class="text-sm underline" data-on:click="@get('/home')">Back</button>
+    </div>
+    {{if .Flash}}
+      <p class="rounded bg-green-100 p-2 text-sm text-green-800">{{.Flash}}</p>
+    {{end}}
+    {{if not .Cards}}
+      <p class="text-slate-500">No cards yet. Add some!</p>
+    {{end}}
+    <ul class="divide-y rounded border border-slate-200 bg-white">
+      {{range .Cards}}
+        <li class="flex items-center gap-3 p-3">
+          <input
+            aria-label="Select card"
+            class="h-5 w-5"
+            data-bind:pick_{{.ID}}
+            type="checkbox"
+          >
+          <div class="min-w-0 flex-1">
+            <p class="whitespace-pre-wrap">{{.Prompt}}</p>
+            {{if .Tags}}
+              <p class="truncate text-xs text-slate-500">{{.Tags}}</p>
+            {{end}}
+          </div>
+          <button
+            class="text-sm text-indigo-600 underline"
+            data-on:click="@get('/cards/{{.ID}}/edit')"
+          >Edit</button>
+          <button
+            class="text-sm text-red-600 underline"
+            data-show="!$confirm_{{.ID}}"
+            data-on:click="$confirm_{{.ID}} = true"
+          >Delete</button>
+          <span class="flex items-center gap-2" data-show="$confirm_{{.ID}}">
+            <button
+              class="animate-confirm-pulse rounded bg-red-600 px-2 py-1 text-sm text-white"
+              data-on:click="@delete('/cards/{{.ID}}')"
+            >Really delete</button>
+            <button
+              class="text-sm underline"
+              data-on:click="$confirm_{{.ID}} = false"
+            >No</button>
+          </span>
+        </li>
+      {{end}}
+    </ul>
+    {{if .Cards}}
+      <button
+        class="rounded bg-red-600 px-4 py-2 text-white hover:bg-red-500"
+        data-on:click="@delete('/cards')"
+      >Delete selected</button>
+    {{end}}
+  </section>
+{{ end }}
+
+{{ define "cardedit" }}
+  <section
+    id="main"
+    class="space-y-3"
+    data-signals="{{.Signals}}"
+  >
+    <h1 class="text-2xl font-bold">Edit card</h1>
+    {{if .Flash}}
+      <p class="text-sm text-red-600">{{.Flash}}</p>
+    {{end}}
+    <textarea
+      class="w-full rounded border border-slate-300 p-2"
+      data-bind:prompt
+      placeholder="Prompt"
+      rows="3"
+    ></textarea>
+    <textarea
+      class="w-full rounded border border-slate-300 p-2"
+      data-bind:answer
+      placeholder="Answer"
+      rows="3"
+    ></textarea>
+    <input
+      class="w-full rounded border border-slate-300 p-2"
+      data-bind:tags
+      placeholder="Tags, comma separated"
+    >
+    <div class="flex gap-2">
+      <button
+        class="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500"
+        data-on:click="@post('/cards/{{.ID}}/edit')"
+      >Save</button>
+      <button
+        class="rounded border border-slate-300 bg-white px-4 py-2 hover:bg-slate-100"
+        data-on:click="@get('/cards')"
+      >Cancel</button>
     </div>
   </section>
 {{ end }}

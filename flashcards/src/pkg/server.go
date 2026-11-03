@@ -25,17 +25,20 @@ type session struct {
 type Server struct {
 	store    *Store
 	tmpl     *template.Template
+	static   fs.FS
 	mu       sync.Mutex
 	sessions map[string]*session
 }
 
 // NewServer parses the embedded templates and returns a ready Server.
-func NewServer(st *Store, tmplFS fs.FS) (*Server, error) {
+// staticFS is rooted at assets/ and served under /assets/.
+func NewServer(st *Store, tmplFS fs.FS, staticFS fs.FS) (*Server, error) {
 	tmpl, err := template.ParseFS(tmplFS, "*.html")
 	if err != nil {
 		return nil, err
 	}
-	return &Server{store: st, tmpl: tmpl, sessions: map[string]*session{}}, nil
+	return &Server{store: st, tmpl: tmpl, static: staticFS,
+		sessions: map[string]*session{}}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -45,10 +48,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /signup", s.handleSignup)
 	mux.HandleFunc("POST /logout", s.authed(s.handleLogout))
 	mux.HandleFunc("GET /home", s.authed(s.handleHome))
+	mux.HandleFunc("GET /cards", s.authed(s.handleCardsList))
 	mux.HandleFunc("GET /cards/new", s.authed(s.handleNewForm))
 	mux.HandleFunc("POST /cards", s.authed(s.handleCreateCard))
 	mux.HandleFunc("GET /cards/import", s.authed(s.handleImportForm))
 	mux.HandleFunc("POST /cards/import", s.authed(s.handleImport))
+	mux.HandleFunc("GET /cards/{id}/edit", s.authed(s.handleEditForm))
+	mux.HandleFunc("POST /cards/{id}/edit", s.authed(s.handleEditCard))
+	mux.HandleFunc("DELETE /cards/{id}", s.authed(s.handleDeleteCard))
+	mux.HandleFunc("DELETE /cards", s.authed(s.handleDeleteCards))
+	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(s.static))))
 	mux.HandleFunc("POST /review/start", s.authed(s.handleReviewStart))
 	mux.HandleFunc("POST /review/reveal", s.authed(s.handleReveal))
 	mux.HandleFunc("POST /review/answer", s.authed(s.handleAnswer))
