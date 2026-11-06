@@ -11,6 +11,7 @@
   <meta content="#F7F3EC" name="theme-color">
   <meta content="yes" name="apple-mobile-web-app-capable">
   <script defer src="/assets/js/datastar.js" type="module"></script>
+  <script defer src="/assets/js/record.js"></script>
   <script type="module">
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/assets/static/sw.js");
@@ -20,7 +21,7 @@
 
 {{define "nav"}}
   {{/* Desktop: pill segmented control in the header.
-                        Mobile: fixed bottom tab bar, like the mockup .tb. */}}
+                                Mobile: fixed bottom tab bar, like the mockup .tb. */}}
   <nav
     class="fixed bottom-0 inset-x-0 z-10 h-16 flex border-t-2 border-ink
            bg-white md:static md:h-auto md:border-0 md:bg-transparent md:block"
@@ -31,13 +32,13 @@
     >
       <a
         class="flex-1 grid place-items-center font-semibold text-xs
-               md:btn md:shadow-none md:border-transparent md:min-h-9
+               md:btn md:shadow-none md:min-h-9
                {{if eq . "study"}}bg-sun md:border-ink{{else}}bg-white{{end}}"
         href="/"
       >Study Mode</a>
       <a
         class="flex-1 grid place-items-center font-semibold text-xs
-               md:btn md:shadow-none md:border-transparent md:min-h-9
+               md:btn md:shadow-none md:min-h-9
                {{if eq . "cards"}}bg-sun md:border-ink{{else}}bg-white{{end}}"
         href="/cards"
       >All Cards</a>

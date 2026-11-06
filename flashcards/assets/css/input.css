@@ -112,3 +112,20 @@
 .flip-back {
   transform: rotateY(180deg);
 }
+
+/* Button busy spinner (data-indicator feedback) */
+@utility spinner {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.35em;
+  border: 2px solid var(--color-ink);
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

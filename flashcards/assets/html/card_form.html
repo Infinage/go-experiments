@@ -10,12 +10,19 @@
   <!DOCTYPE html>
   <html lang="en">
     <head>{{template "head"}}</head>
-    <body class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0">
-      {{template "header" "cards"}}
-      <main class="mx-auto w-full max-w-2xl p-4 pt-0 md:px-8">
-        <h1 class="text-xl font-bold mb-4">{{.Title}}</h1>
-        {{template "cardForm" .Data}}
-      </main>
+    <body
+      class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0"
+      data-signals="{'revealed': false}"
+    >
+      <div class="mx-auto w-full max-w-6xl px-4 md:px-8">
+        {{template "header" "cards"}}
+        <main class="pb-8">
+          <div class="mx-auto max-w-2xl">
+            <h1 class="text-xl font-bold mb-4">{{.Title}}</h1>
+            {{template "cardForm" .Data}}
+          </div>
+        </main>
+      </div>
     </body>
   </html>
 {{end}}
@@ -36,6 +43,7 @@
           placeholder="Question"
           required
           rows="3"
+          spellcheck="false"
         >{{.Front}}</textarea>
       </label>
       <label class="flex flex-col gap-1 text-sm font-semibold">
@@ -47,6 +55,7 @@
           placeholder="Answer"
           required
           rows="3"
+          spellcheck="false"
         >{{.Back}}</textarea>
       </label>
       <label class="flex flex-col gap-1 text-sm font-semibold">
@@ -56,6 +65,7 @@
           list="category-list"
           name="category"
           placeholder="e.g. web (optional)"
+          spellcheck="false"
           value="{{.Category}}"
         >
         <datalist id="category-list">
@@ -64,7 +74,7 @@
           {{end}}
         </datalist>
       </label>
-      <fieldset class="flex flex-col gap-1 text-sm font-semibold">
+      <fieldset class="flex flex-col gap-2 text-sm font-semibold">
         <legend>Front media (optional)</legend>
         <label
           class="flex items-center gap-2 box px-2 h-11 bg-white
@@ -79,11 +89,11 @@
             name="front_image"
             type="file"
           >
-          <span class="font-semibold text-xs w-10">Image</span>
+          <span class="font-semibold text-xs w-14">Image</span>
           <span
             class="inline-flex items-center justify-center bg-sun
-                   border-2 border-ink rounded-full px-3 min-h-8
-                   font-semibold text-xs text-ink"
+                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                   text-xs text-ink"
           >Choose file</span>
           <span
             class="text-xs text-ink/60 truncate"
@@ -96,6 +106,32 @@
         >
           <input
             class="sr-only"
+            accept="image/*"
+            capture="environment"
+            data-on:change="$imgUrl = evt.target.files.length
+              ? URL.createObjectURL(evt.target.files[0])
+              : ''; $imgName = evt.target.files[0]?.name || '';"
+            name="front_image_camera"
+            type="file"
+          >
+          <span class="font-semibold text-xs w-14">Camera</span>
+          <span
+            class="inline-flex items-center justify-center bg-sun
+                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                   text-xs text-ink"
+          >Take photo</span>
+          <span
+            class="text-xs text-ink/60 truncate"
+            data-text="$imgName || ''"
+          ></span>
+        </label>
+        <label
+          class="flex items-center gap-2 box px-2 h-11 bg-white
+                 font-normal cursor-pointer"
+        >
+          <input
+            id="front-audio-input"
+            class="sr-only"
             accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
             data-on:change="$audUrl = evt.target.files.length
               ? URL.createObjectURL(evt.target.files[0])
@@ -103,68 +139,64 @@
             name="front_audio"
             type="file"
           >
-          <span class="font-semibold text-xs w-10">Audio</span>
+          <span class="font-semibold text-xs w-14">Audio</span>
           <span
             class="inline-flex items-center justify-center bg-sun
-                   border-2 border-ink rounded-full px-3 min-h-8
-                   font-semibold text-xs text-ink"
+                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                   text-xs text-ink"
           >Choose file</span>
           <span
             class="text-xs text-ink/60 truncate"
             data-text="$audName || 'No file chosen'"
           ></span>
         </label>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="btn bg-white min-h-9"
+            data-record-target="#front-audio-input"
+            type="button"
+          >Record audio</button>
+          {{if .Card.ID}}
+            <button
+              class="btn bg-white min-h-9"
+              data-attr:disabled="$busy"
+              data-indicator:busy
+              data-on:click="$delKind = 'image';
+                @post('/cards/{{.Card.ID}}/media/delete')"
+              data-show="$imgUrl"
+              style="display: none"
+              type="button"
+            >Remove image</button>
+            <button
+              class="btn bg-white min-h-9"
+              data-attr:disabled="$busy"
+              data-indicator:busy
+              data-on:click="$delKind = 'audio';
+                @post('/cards/{{.Card.ID}}/media/delete')"
+              data-show="$audUrl"
+              style="display: none"
+              type="button"
+            >Remove audio</button>
+          {{end}}
+        </div>
       </fieldset>
       <div class="flex gap-2">
         <button class="btn-sun" type="submit">Save</button>
-        <a
-          class="btn inline-grid place-items-center bg-white"
-          href="/cards"
-        >Cancel</a>
+        <a class="btn bg-white" href="/cards">Cancel</a>
       </div>
     </div>
   </form>
 
+  {{/* Miniature live preview, same flip card as the study view. */}}
   <div
+    class="mt-6"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
       'imgName': '', 'audName': '',
+      'revealed': false, 'delKind': '',
       'imgUrl': {{existingMediaURL .Card "image"}},
       'audUrl': {{existingMediaURL .Card "audio"}}}"
   >
-    <h2 class="text-sm font-bold mt-6 mb-2">Preview</h2>
-    <div
-      class="box bg-pink p-6 flex flex-col items-center justify-center gap-2
-             min-h-40"
-    >
-      <span class="tag">Front</span>
-      <img
-        class="max-h-48 rounded-xl border-2 border-ink"
-        alt="Card front image preview"
-        data-attr:src="$imgUrl"
-        data-show="$imgUrl"
-        style="display: none"
-      >
-      <audio
-        class="w-full"
-        controls
-        data-attr:src="$audUrl"
-        data-show="$audUrl"
-        style="display: none"
-      ></audio>
-      <p
-        class="font-semibold text-lg text-center whitespace-pre-line"
-        data-text="$front"
-      ></p>
-    </div>
-    <div
-      class="box bg-mint p-6 flex flex-col items-center justify-center gap-2
-             min-h-40 mt-3"
-    >
-      <span class="tag">Back</span>
-      <p
-        class="font-semibold text-lg text-center whitespace-pre-line"
-        data-text="$back"
-      ></p>
-    </div>
+    <h2 class="text-sm font-bold mb-2">Preview</h2>
+    <div class="max-w-sm mx-auto">{{template "cardFlip" .Preview}}</div>
   </div>
 {{end}}

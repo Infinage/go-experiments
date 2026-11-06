@@ -11,11 +11,59 @@ import (
 	"strings"
 	"time"
 
+	"github.com/starfederation/datastar-go/datastar"
+
 	"github.com/infinage/go-experiments/flashcards/internal/store"
 )
 
+// readSignals wraps datastar.ReadSignals for short local use.
+func readSignals(r *http.Request, target any) error {
+	return datastar.ReadSignals(r, target)
+}
+
 func mediaPath(id int64, kind string) string {
 	return "/cards/" + strconv.FormatInt(id, 10) + "/media/" + kind
+}
+
+// mediaSignals carries the media-delete request parameters.
+type mediaSignals struct {
+	Kind string `json:"delKind"`
+}
+
+// deleteMedia removes a card-front image or audio over SSE.
+func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.pathID(w, r)
+	if !ok {
+		return
+	}
+	var sig mediaSignals
+	if err := readSignals(r, &sig); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var err error
+	switch sig.Kind {
+	case "image":
+		err = s.store.ClearImage(id)
+	case "audio":
+		err = s.store.ClearAudio(id)
+	default:
+		http.Error(w, "bad kind", http.StatusBadRequest)
+		return
+	}
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Clear the preview signals so the UI drops the media immediately.
+	payload := `{"imgUrl": "", "imgName": ""}`
+	if sig.Kind == "audio" {
+		payload = `{"audUrl": "", "audName": ""}`
+	}
+	if err := datastar.NewSSE(w, r).
+		PatchSignals([]byte(payload)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // Upload limits for card-front media.

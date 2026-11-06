@@ -22,6 +22,13 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	funcs := template.FuncMap{
 		// sub is integer subtraction for template arithmetic.
 		"sub": func(a, b int) int { return a - b },
+		// gradeChoices lists the study grade buttons.
+		"gradeChoices": func() []gradeChoice {
+			return []gradeChoice{
+				{"again", "Again"}, {"hard", "Hard"},
+				{"good", "Good"}, {"easy", "Easy"},
+			}
+		},
 		// percent guards against division by zero in progress bars.
 		"percent": func(part, total int) int {
 			if total == 0 {
@@ -112,6 +119,7 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	mux.HandleFunc("POST /cards/save", s.saveCard)
 	mux.HandleFunc("GET /cards/{id}/edit", s.editCard)
 	mux.HandleFunc("GET /cards/{id}/media/{kind}", s.cardMedia)
+	mux.HandleFunc("POST /cards/{id}/media/delete", s.deleteMedia)
 	mux.HandleFunc("DELETE /cards", s.deleteCards)
 	return mux, nil
 }

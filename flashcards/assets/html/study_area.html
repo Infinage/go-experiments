@@ -30,6 +30,7 @@
             <label class="flex items-center gap-1.5 text-[13px] font-medium">
               <input
                 {{if .HideMastered}}checked{{end}}
+                class="cursor-pointer"
                 data-bind="hideMastered"
                 data-on:change="$revealed = false; @get('/')"
                 type="checkbox"
@@ -38,72 +39,23 @@
             </label>
           </div>
           <button
-            class="btn bg-white"
+            class="btn bg-white hover:bg-sun"
+            data-attr:disabled="$busy"
+            data-indicator:busy
             data-on:click="$revealed = false; $shuffleSeed = Date.now();
           $idx = 0; @get('/')"
             type="button"
-          >Shuffle</button>
+          >
+            <span
+              class="spinner"
+              data-show="$busy"
+              style="display: none"
+            ></span>
+            Shuffle
+          </button>
         </div>
 
-        {{/* The card: 3D flip on reveal. */}}
-        <div
-          class="flip-scene relative h-80 md:h-[420px] cursor-pointer"
-          aria-label="Card front, activate to reveal the answer"
-          data-on:click="$revealed = true"
-          role="button"
-          tabindex="0"
-        >
-          <div
-            class="flip-card relative h-full w-full"
-            data-style:transform="$revealed ? 'rotateY(180deg)' : ''"
-          >
-            <div
-              class="flip-face box bg-pink rounded-[20px] shadow-retro-lg absolute
-                     inset-0 overflow-hidden flex flex-col items-center
-                     justify-center gap-3.5 px-6 py-8 text-center"
-            >
-              {{if .Card.Category}}
-                <span class="tag absolute top-4 left-1/2 -translate-x-1/2">
-                  {{.Card.Category}}
-                </span>
-              {{end}}
-              {{if .Card.New}}
-                <span
-                  class="tag absolute top-4 right-4"
-                  style="background: var(--color-sky)"
-                >New</span>
-              {{end}}
-              {{if .Card.HasImage}}
-                <img
-                  class="max-h-40 md:max-h-52 rounded-xl border-2 border-ink"
-                  alt="Card front image"
-                  src="/cards/{{.Card.ID}}/media/image"
-                >
-              {{end}}
-              {{if .Card.HasAudio}}
-                <audio
-                  class="w-full max-w-sm"
-                  controls
-                  src="/cards/{{.Card.ID}}/media/audio"
-                ></audio>
-              {{end}}
-              <h1
-                class="m-0 font-semibold text-[26px] md:text-[34px] leading-tight
-                       whitespace-pre-line max-w-[560px]"
-              >{{.Card.Front}}</h1>
-              <span class="text-[13px]">Tap to reveal answer</span>
-            </div>
-            <div
-              class="flip-face flip-back box bg-mint rounded-[20px] shadow-retro-lg
-                     absolute inset-0 overflow-hidden flex items-center
-                     justify-center px-6 py-8 text-center"
-            >
-              <p
-                class="m-0 text-lg md:text-xl whitespace-pre-line max-w-[560px]"
-              >{{.Card.Back}}</p>
-            </div>
-          </div>
-        </div>
+        {{template "cardFlip" .CardFlip}}
 
         {{/* Grade buttons, shown after the reveal. */}}
         <div
@@ -111,39 +63,41 @@
           data-show="$revealed"
           style="display: none"
         >
-          <button
-            class="btn bg-white"
-            data-on:click="$grade = 'again'; @post('/study/{{.Card.ID}}/grade')"
-            type="button"
-          >Again</button>
-          <button
-            class="btn bg-white"
-            data-on:click="$grade = 'hard'; @post('/study/{{.Card.ID}}/grade')"
-            type="button"
-          >Hard</button>
-          <button
-            class="btn-sun"
-            data-on:click="$grade = 'good'; @post('/study/{{.Card.ID}}/grade')"
-            type="button"
-          >Good</button>
-          <button
-            class="btn bg-white"
-            data-on:click="$grade = 'easy'; @post('/study/{{.Card.ID}}/grade')"
-            type="button"
-          >Easy</button>
+          {{range $g := gradeChoices}}
+            <button
+              class="btn bg-white hover:bg-sun"
+              data-attr:disabled="$busy"
+              data-indicator:busy
+              data-on:click="$grade = '{{$g.Value}}';
+            @post('/study/{{$.Card.ID}}/grade')"
+              type="button"
+            >
+              <span
+                class="spinner"
+                data-show="$busy"
+                style="display: none"
+              ></span>
+              {{$g.Label}}
+            </button>
+          {{end}}
         </div>
 
         {{/* Position bar with working paging. */}}
         <div class="box flex items-center justify-between px-3.5 py-2.5 mt-3.5">
           <button
-            class="btn bg-white {{if le .Idx 0}}opacity-50 pointer-events-none{{end}}"
+            class="btn bg-white hover:bg-sun
+                   {{if le .Idx 0}}opacity-50 pointer-events-none{{end}}"
+            data-attr:disabled="$busy"
+            data-indicator:busy
             data-on:click="$idx = $idx - 1; $revealed = false; @get('/')"
             type="button"
           >← Previous</button>
           <span class="text-xs">{{.Position}}</span>
           <button
-            class="btn bg-white
+            class="btn bg-white hover:bg-sun
                    {{if ge .Idx (sub .Count 1)}}opacity-50 pointer-events-none{{end}}"
+            data-attr:disabled="$busy"
+            data-indicator:busy
             data-on:click="$idx = $idx + 1; $revealed = false; @get('/')"
             type="button"
           >Next →</button>
@@ -218,7 +172,7 @@
                 type="button"
               >Review anyway</button>
             {{end}}
-            <a class="btn-sun" href="/cards/new">Add new cards</a>
+            <a class="btn bg-white" href="/cards/new">Add new cards</a>
             {{if gt .Stats.Total 0}}{{template "reset-confirm" .}}{{end}}
           </div>
         </div>
@@ -244,12 +198,17 @@
   >Reset progress</button>
   <button
     class="btn"
+    data-attr:disabled="$busy"
+    data-indicator:busy
     data-on:click="@post('/study/reset')"
     data-show="$confirm"
     style="display: none;
            background: var(--color-rose)"
     type="button"
-  >Really reset?</button>
+  >
+    <span class="spinner" data-show="$busy" style="display: none"></span>
+    Really reset?
+  </button>
 {{end}}
 
 {{define "statsBox"}}

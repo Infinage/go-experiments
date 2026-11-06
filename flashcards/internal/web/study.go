@@ -28,8 +28,14 @@ type studySignals struct {
 	Force bool `json:"force"`
 }
 
+// gradeChoice is one study grade button.
+type gradeChoice struct {
+	Value, Label string
+}
+
 // studyData backs the whole study page and its card fragment.
 type studyData struct {
+	CardFlip     cardFlipView
 	Card         *store.StudyCard // nil when nothing is due
 	Stats        store.StudyStats
 	HideMastered bool
@@ -102,6 +108,7 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 		Idx: idx, Count: len(q), Decks: decks, Force: sig.Force}
 	if idx < len(q) {
 		d.Card = &q[idx]
+		d.CardFlip = studyCardFlip(&q[idx])
 	}
 	if d.Count > 0 {
 		d.Position = "Card " + strconv.Itoa(idx+1) + " of " +

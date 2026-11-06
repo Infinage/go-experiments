@@ -37,6 +37,33 @@ func (s *Store) setMedia(cardID int64, m Media, query string) error {
 	return nil
 }
 
+// ClearImage removes the card-front image.
+func (s *Store) ClearImage(cardID int64) error {
+	return s.clearMedia(cardID, "front_image = NULL, front_image_mime = NULL")
+}
+
+// ClearAudio removes the card-front audio.
+func (s *Store) ClearAudio(cardID int64) error {
+	return s.clearMedia(cardID, "front_audio = NULL, front_audio_mime = NULL")
+}
+
+func (s *Store) clearMedia(cardID int64, setClause string) error {
+	res, err := s.db.Exec(
+		`UPDATE cards SET `+setClause+`,
+			updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`, cardID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	switch {
+	case err != nil:
+		return err
+	case n == 0:
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Image returns the card-front image, or ErrNoMedia when absent.
 func (s *Store) Image(cardID int64) (Media, error) {
 	return s.media(cardID, "front_image", "front_image_mime")

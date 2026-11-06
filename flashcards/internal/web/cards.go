@@ -80,6 +80,7 @@ type cardFormData struct {
 	Card       store.Card // zero value for "new"
 	Categories []string
 	Error      string
+	Preview    cardFlipView
 	// Form values echoed back after a failed validation.
 	Front, Back, Category string
 }
@@ -96,7 +97,8 @@ func (s *Server) newCard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "NewCard", cardFormData{Categories: names})
+	s.render(w, "NewCard", cardFormData{Categories: names,
+		Preview: previewCardFlip("", "", store.Card{})})
 }
 
 func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +121,8 @@ func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "EditCard", cardFormData{Card: c, Categories: names,
-		Front: c.Front, Back: c.Back, Category: c.Category})
+		Front: c.Front, Back: c.Back, Category: c.Category,
+		Preview: previewCardFlip(c.Front, c.Back, c)})
 }
 
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +131,8 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 	back := strings.TrimSpace(r.FormValue("back"))
 	category := strings.TrimSpace(r.FormValue("category"))
 
-	d := cardFormData{Front: front, Back: back, Category: category}
+	d := cardFormData{Front: front, Back: back, Category: category,
+		Preview: previewCardFlip(front, back, store.Card{})}
 	if front == "" || back == "" {
 		d.Error = "Front and back text are required."
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -169,6 +173,13 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request, id int64) err
 	image, err := readUpload(r, "front_image", "image")
 	if err != nil {
 		return err
+	}
+	if image.Bytes == nil {
+		// Camera capture input (mobile "Take photo").
+		image, err = readUpload(r, "front_image_camera", "image")
+		if err != nil {
+			return err
+		}
 	}
 	if image.Bytes != nil {
 		if err := s.store.SetImage(id, image); err != nil {

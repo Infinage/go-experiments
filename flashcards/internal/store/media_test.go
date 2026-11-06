@@ -57,3 +57,29 @@ func TestSetMediaMissingCard(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
+
+func TestClearMedia(t *testing.T) {
+	s := mustStore(t)
+	id, _ := s.CreateCard("q", "a", "")
+	s.SetImage(id, Media{Bytes: []byte("i"), Mime: "image/png"})
+	s.SetAudio(id, Media{Bytes: []byte("a"), Mime: "audio/mpeg"})
+
+	if err := s.ClearImage(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Image(id); !errors.Is(err, ErrNoMedia) {
+		t.Fatalf("image should be gone: %v", err)
+	}
+	if _, err := s.Audio(id); err != nil {
+		t.Fatalf("audio should survive: %v", err)
+	}
+	if err := s.ClearAudio(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Audio(id); !errors.Is(err, ErrNoMedia) {
+		t.Fatalf("audio should be gone: %v", err)
+	}
+	if err := s.ClearImage(999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing card: %v", err)
+	}
+}

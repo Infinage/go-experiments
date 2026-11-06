@@ -1,0 +1,90 @@
+{{define "cardFlip"}}
+  {{$c := .}}
+  <div
+    class="flip-scene relative cursor-pointer {{.Size}}"
+    {{if .Interactive}}
+    role="button"
+    tabindex="0"
+    aria-label="Card front, activate to flip"
+    data-on:click="$revealed = !$revealed;"
+    {{end}}
+  >
+    <div
+      id="flip-{{.Key}}"
+      class="flip-card relative h-full w-full"
+      data-style:transform="$revealed ? 'rotateY(180deg)' : ''"
+    >
+      <div
+        class="flip-face box bg-pink rounded-[20px] shadow-retro-lg absolute
+               inset-0 overflow-hidden flex flex-col items-center justify-center
+               gap-3 px-4 md:px-6 py-6 text-center"
+      >
+        {{if .Category}}
+          <span
+            class="tag absolute top-3 left-1/2 -translate-x-1/2"
+            style="background: var(--color-sun)"
+          >{{.Category}}</span>
+        {{end}}
+        {{if .IsNew}}
+          <span
+            class="tag absolute top-3 right-3"
+            style="background: var(--color-sky)"
+          >New</span>
+        {{end}}
+        {{if .LiveMedia}}
+          <img
+            class="max-h-28 md:max-h-40 rounded-xl border-2 border-ink"
+            alt="Card front image"
+            data-attr:src="$imgUrl"
+            data-show="$imgUrl"
+            style="display: none"
+          >
+          <audio
+            class="w-full max-w-xs"
+            controls
+            data-attr:src="$audUrl"
+            data-on:click__stop=";"
+            data-show="$audUrl"
+            style="display: none"
+          ></audio>
+        {{else}}
+          {{if .ImageURL}}
+            <img
+              class="max-h-36 md:max-h-48 rounded-xl border-2 border-ink"
+              alt="Card front image"
+              src="{{.ImageURL}}"
+            >
+          {{end}}
+          {{if .AudioURL}}
+            <audio class="w-full max-w-sm" controls src="{{.AudioURL}}"></audio>
+          {{end}}
+        {{end}}
+        <h1
+          class="m-0 font-semibold leading-tight whitespace-pre-line
+                 max-w-[560px]
+                 {{if eq .Size "h-64"}}text-lg{{else}}text-[26px] md:text-[34px]{{end}}"
+          {{if .Live}}data-text="$front"
+          {{end}}
+        >{{.Front}}</h1>
+        {{if .TapHint}}
+          <span
+            class="text-[13px]"
+            data-show="!$revealed"
+          >Tap to reveal answer</span>
+        {{end}}
+      </div>
+      <div
+        class="flip-face flip-back box bg-mint rounded-[20px] shadow-retro-lg
+               absolute inset-0 overflow-hidden flex items-center justify-center
+               px-4 md:px-6 py-6 text-center"
+      >
+        <p
+          class="m-0 whitespace-pre-line max-w-[560px]
+                 {{if eq .Size "h-64"}}text-sm{{else}}text-lg md:text-xl{{end}}"
+          {{if .Live}}data-text="$back"
+          {{end}}
+        >{{.Back}}</p>
+      </div>
+    </div>
+  </div>
+{{end}}

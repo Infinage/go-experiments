@@ -22,6 +22,7 @@
                 data-bind="q"
                 data-on:input__debounce.300ms="@get('/cards')"
                 placeholder="Search prompts, answers, tags"
+                spellcheck="false"
                 type="search"
               >
               {{/* Signal-driven highlight so it survives fragment patches. */}}
@@ -131,7 +132,8 @@
       >
         <button
           class="absolute top-2.5 right-2.5 z-10 size-5 rounded-full
-                 border-2 border-ink text-[10px] grid place-items-center"
+                 border-2 border-ink text-[10px] grid place-items-center
+                 cursor-pointer"
           aria-label="Select for deletion"
           data-class="{'bg-white': !$deleteIds.includes({{.ID}}),
                 'bg-sun': $deleteIds.includes({{.ID}})}"
