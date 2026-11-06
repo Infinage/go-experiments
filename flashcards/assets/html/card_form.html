@@ -33,7 +33,9 @@
     class="lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8 lg:items-start"
     data-computed:any-busy="!!($busyDelImg || $busyDelAud)"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
-      'imgName': '', 'audName': '', 'mediaKind': {{toSignal .MediaKind}},
+      'imgName': '', 'audName': '',
+      'mediaKind': {{toSignal .MediaKind}},
+      'imgMode': 'upload', 'audMode': 'upload',
       'delKind': '', 'revealed': false,
       'imgUrl': {{existingMediaURL .Card "image"}},
       'audUrl': {{existingMediaURL .Card "audio"}},
@@ -117,57 +119,76 @@
             >Audio</button>
           </div>
 
-          {{/* Image options. */}}
+          {{/* Image options: a switch between Upload and Camera. Switching
+                           clears both inputs so only ever one file is set. */}}
           <div
             class="flex flex-col gap-2"
             data-show="$mediaKind === 'image'"
             style="display: none"
           >
+            <div class="flex gap-1.5">
+              <button
+                class="btn h-9"
+                data-class="{'bg-white': $imgMode !== 'upload',
+                  'bg-sun': $imgMode === 'upload'}"
+                data-on:click="$imgMode = 'upload'; $imgUrl = '';
+                  $imgName = '';
+                  document.querySelectorAll('[name^=front_image]').
+                    forEach(i => i.value = '');"
+                type="button"
+              >Upload</button>
+              <button
+                class="btn h-9"
+                data-class="{'bg-white': $imgMode !== 'camera',
+                  'bg-sun': $imgMode === 'camera'}"
+                data-on:click="$imgMode = 'camera'; $imgUrl = '';
+                  $imgName = '';
+                  document.querySelectorAll('[name^=front_image]').
+                    forEach(i => i.value = '');"
+                type="button"
+              >Camera</button>
+            </div>
+            <input
+              class="sr-only"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              data-on:change="$imgUrl = evt.target.files.length
+                ? URL.createObjectURL(evt.target.files[0])
+                : ''; $imgName = evt.target.files[0]?.name || ''"
+              data-show="$imgMode === 'upload'"
+              name="front_image"
+              style="display: none"
+              type="file"
+            >
+            <input
+              class="sr-only"
+              accept="image/*"
+              capture="environment"
+              data-on:change="$imgUrl = evt.target.files.length
+                ? URL.createObjectURL(evt.target.files[0])
+                : ''; $imgName = evt.target.files[0]?.name || ''"
+              data-show="$imgMode === 'camera'"
+              name="front_image_camera"
+              style="display: none"
+              type="file"
+            >
             <label
               class="flex items-center gap-2 box px-2 h-11 bg-white
                      font-normal cursor-pointer"
+              data-on:click="document.querySelector($imgMode === 'camera'
+                ? 'input[name=front_image_camera]'
+                : 'input[name=front_image]').click()"
             >
-              <input
-                class="sr-only"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                data-on:change="$imgUrl = evt.target.files.length
-                  ? URL.createObjectURL(evt.target.files[0])
-                  : ''; $imgName = evt.target.files[0]?.name || ''"
-                name="front_image"
-                type="file"
-              >
               <span
                 class="inline-flex items-center justify-center bg-sun
                        border-2 border-ink rounded-full px-3 min-h-8 font-semibold
                        text-xs text-ink"
-              >Upload image</span>
+              >{{if .Card.HasImage}}Replace image{{else}}Choose file{{end}}</span>
               <span
                 class="text-xs text-ink/60 truncate"
-                data-text="$imgName || 'No file chosen'"
-              ></span>
-            </label>
-            <label
-              class="flex items-center gap-2 box px-2 h-11 bg-white
-                     font-normal cursor-pointer"
-            >
-              <input
-                class="sr-only"
-                accept="image/*"
-                capture="environment"
-                data-on:change="$imgUrl = evt.target.files.length
-                  ? URL.createObjectURL(evt.target.files[0])
-                  : ''; $imgName = evt.target.files[0]?.name || ''"
-                name="front_image_camera"
-                type="file"
-              >
-              <span
-                class="inline-flex items-center justify-center bg-sun
-                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                       text-xs text-ink"
-              >Take photo</span>
-              <span
-                class="text-xs text-ink/60 truncate"
-                data-text="$imgName || 'Opens the camera on mobile'"
+                data-text="$imgName
+                  || ($imgMode === 'camera'
+                    ? 'Opens the camera on mobile'
+                    : 'No file chosen')"
               ></span>
             </label>
             {{if .Card.ID}}
@@ -192,41 +213,69 @@
             {{end}}
           </div>
 
-          {{/* Audio options. */}}
+          {{/* Audio options: switch between Upload and Record. */}}
           <div
             class="flex flex-col gap-2"
             data-show="$mediaKind === 'audio'"
             style="display: none"
           >
+            <div class="flex gap-1.5">
+              <button
+                class="btn h-9"
+                data-class="{'bg-white': $audMode !== 'upload',
+                  'bg-sun': $audMode === 'upload'}"
+                data-on:click="$audMode = 'upload'; $audUrl = '';
+                  $audName = '';
+                  document.querySelector('[name=front_audio]').
+                    value = '';"
+                type="button"
+              >Upload</button>
+              <button
+                class="btn h-9"
+                data-class="{'bg-white': $audMode !== 'record',
+                  'bg-sun': $audMode === 'record'}"
+                data-on:click="$audMode = 'record'; $audUrl = '';
+                  $audName = '';
+                  document.querySelector('[name=front_audio]').
+                    value = '';"
+                type="button"
+              >Record</button>
+            </div>
+            <input
+              id="front-audio-input"
+              class="sr-only"
+              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
+              data-on:change="$audUrl = evt.target.files.length
+                ? URL.createObjectURL(evt.target.files[0])
+                : ''; $audName = evt.target.files[0]?.name || ''"
+              name="front_audio"
+              type="file"
+            >
+            <button
+              class="btn bg-white min-h-9 w-fit"
+              data-record-target="#front-audio-input"
+              data-show="$audMode === 'record'"
+              style="display: none"
+              type="button"
+            >Record audio</button>
             <label
               class="flex items-center gap-2 box px-2 h-11 bg-white
                      font-normal cursor-pointer"
+              data-on:click="document.querySelector(
+                '[name=front_audio]').click()"
+              data-show="$audMode === 'upload'"
+              style="display: none"
             >
-              <input
-                id="front-audio-input"
-                class="sr-only"
-                accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
-                data-on:change="$audUrl = evt.target.files.length
-                  ? URL.createObjectURL(evt.target.files[0])
-                  : ''; $audName = evt.target.files[0]?.name || ''"
-                name="front_audio"
-                type="file"
-              >
               <span
                 class="inline-flex items-center justify-center bg-sun
                        border-2 border-ink rounded-full px-3 min-h-8 font-semibold
                        text-xs text-ink"
-              >Upload audio</span>
+              >{{if .Card.HasAudio}}Replace audio{{else}}Choose file{{end}}</span>
               <span
                 class="text-xs text-ink/60 truncate"
                 data-text="$audName || 'No file chosen'"
               ></span>
             </label>
-            <button
-              class="btn bg-white min-h-9 w-fit"
-              data-record-target="#front-audio-input"
-              type="button"
-            >Record audio</button>
             {{if .Card.ID}}
               <button
                 class="btn bg-white min-h-9 w-fit"
@@ -269,7 +318,7 @@
           <span data-text="$statusLine">{{.StatusLine}}</span>
           <button
             class="btn bg-white min-h-8"
-            data-attr:disabled="$anyBusyForm"
+            data-attr:disabled="$anyBusy"
             data-indicator:busy-reset-status
             data-on:click="@post('/cards/{{.Card.ID}}/status/reset')"
             type="button"
