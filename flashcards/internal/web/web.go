@@ -20,8 +20,9 @@ type Server struct {
 // New builds the HTTP handler. assets must contain html/, css/ and js/.
 func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	funcs := template.FuncMap{
-		// sub is integer subtraction for template arithmetic.
+		// sub/add are integer arithmetic for templates.
 		"sub": func(a, b int) int { return a - b },
+		"add": func(a, b int) int { return a + b },
 		// cardStatusData wraps the status-line fields for the fragment.
 		"cardStatusData": func(line string, id int64) cardStatusData {
 			return cardStatusData{Line: line, ID: id}

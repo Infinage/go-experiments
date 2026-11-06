@@ -49,7 +49,7 @@
             data-attr:disabled="$anyBusy"
             data-indicator:busy-shuffle
             data-on:click="$revealed = false; $shuffleSeed = Date.now();
-          $idx = 0; @get('/')"
+          $idx = 0; $reviewed = 0; @get('/')"
             type="button"
           >
             <span
@@ -84,6 +84,7 @@
                 } else {
                   $requeuedIds.push({{$.Card.ID}});
                 };{{end}}
+                $reviewed = $reviewed + 1;
                 $grade = '{{$g.Value}}';
                 @post('/study/{{$.Card.ID}}/grade')"
               type="button"
@@ -108,7 +109,10 @@
             data-on:click="$idx = $idx - 1; $revealed = false; @get('/')"
             type="button"
           >← Previous</button>
-          <span class="text-xs">{{.Position}}</span>
+          <span
+            class="text-xs"
+            data-text="'Card ' + ($reviewed + 1) + ' of ' + $passTotal"
+          >Card {{add .Idx 1}} of {{.Count}}</span>
           <button
             class="btn bg-white hover:bg-sun
                    {{if ge .Idx (sub .Count 1)}}opacity-50 pointer-events-none{{end}}"
@@ -265,7 +269,7 @@
   <div class="box p-4 flex flex-col gap-3">
     <b class="text-[15px]">Decks</b>
     {{/* One segmented bar per deck: mastered (mint), in progress (sky),
-                           not started (pink). Scrolls with the retro scrollbar. */}}
+                                       not started (pink). Scrolls with the retro scrollbar. */}}
     <div class="flex flex-col gap-3 max-h-56 overflow-y-auto retro-scroll pr-1">
       {{range .}}
         <div class="flex flex-col gap-1">

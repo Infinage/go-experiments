@@ -87,6 +87,14 @@ func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// The pass definition changed (filter/shuffle/force): refresh
+		// the pass total. reviewed is reset client-side by the
+		// triggering action.
+		if err := sse.PatchSignals([]byte(
+			`{"passTotal": ` + strconv.Itoa(d.Count) + `}`)); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		if err := sse.PatchElements(s.templateHTML("study-area", d)); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
