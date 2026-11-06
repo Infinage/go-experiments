@@ -21,7 +21,7 @@
 {{end}}
 
 {{define "cardForm"}}
-  <form action="/cards/save" method="post">
+  <form action="/cards/save" enctype="multipart/form-data" method="post">
     <input name="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
     {{with .Error}}
       <p class="box p-3 text-sm mb-4">{{.}}</p>
@@ -80,7 +80,11 @@
             type="file"
           >
           <span class="font-semibold text-xs w-10">Image</span>
-          <span class="btn-sun min-h-9">Choose file</span>
+          <span
+            class="inline-flex items-center justify-center bg-sun
+                   border-2 border-ink rounded-full px-3 min-h-8
+                   font-semibold text-xs text-ink"
+          >Choose file</span>
           <span
             class="text-xs text-ink/60 truncate"
             data-text="$imgName || 'No file chosen'"
@@ -100,7 +104,11 @@
             type="file"
           >
           <span class="font-semibold text-xs w-10">Audio</span>
-          <span class="btn-sun min-h-9">Choose file</span>
+          <span
+            class="inline-flex items-center justify-center bg-sun
+                   border-2 border-ink rounded-full px-3 min-h-8
+                   font-semibold text-xs text-ink"
+          >Choose file</span>
           <span
             class="text-xs text-ink/60 truncate"
             data-text="$audName || 'No file chosen'"

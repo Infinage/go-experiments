@@ -30,9 +30,9 @@
 }
 
 @utility btn-sun {
-  @apply border-2 border-ink rounded-full px-3.5 min-h-11 font-semibold
-    text-xs text-ink shadow-retro inline-flex items-center justify-center
-    gap-1.5 whitespace-nowrap cursor-pointer;
+  @apply bg-sun border-2 border-ink rounded-full px-3.5 min-h-11
+    font-semibold text-xs text-ink shadow-retro inline-flex items-center
+    justify-center gap-1.5 whitespace-nowrap cursor-pointer;
 }
 
 /* tg: small pill tag */
@@ -95,4 +95,20 @@
   font-weight: 700;
   font-display: swap;
   src: url("/assets/fonts/poppins-700.woff2") format("woff2");
+}
+
+/* Flip animation for the study card reveal */
+@utility flip-scene {
+  perspective: 1400px;
+}
+.flip-card {
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+.flip-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-back {
+  transform: rotateY(180deg);
 }

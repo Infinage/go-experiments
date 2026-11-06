@@ -2,90 +2,107 @@
   <div id="study-area" class="contents">
     {{if .Card}}
       <div class="flex-1 min-w-0 flex flex-col">
-        {{/* Filter bar: category select, hide-mastered, position. */}}
+        {{/* Filter bar: category select, hide-mastered, shuffle. */}}
         <div
-          class="box flex items-center justify-between gap-2 px-3.5 py-2.5 mb-3.5"
+          class="box flex flex-wrap items-center justify-between gap-2 px-3.5
+                 py-2.5 mb-3.5"
         >
-          <div class="flex items-center gap-2">
-            <select
-              class="btn appearance-none pr-7 bg-white"
-              data-bind="category"
-              data-on:change="@get('/')"
-            >
-              <option value="">All Categories</option>
-              {{$sel := .Category}}
-              {{range .Categories}}
-                <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>
-                  {{.Name}}
-                </option>
-              {{end}}
-            </select>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative">
+              <select
+                class="btn h-11 appearance-none pl-4 pr-9 bg-white"
+                data-bind="category"
+                data-on:change="$revealed = false; @get('/')"
+              >
+                <option value="">All Categories</option>
+                {{$sel := .Category}}
+                {{range .Categories}}
+                  <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>
+                    {{.Name}}
+                  </option>
+                {{end}}
+              </select>
+              <span
+                class="pointer-events-none absolute right-3 top-1/2
+                       -translate-y-1/2 text-[10px]"
+              >▾</span>
+            </div>
             <label class="flex items-center gap-1.5 text-[13px] font-medium">
               <input
-                type="checkbox"
-                data-bind="hideMastered"
-                data-on:change="@get('/')"
                 {{if .HideMastered}}checked{{end}}
+                data-bind="hideMastered"
+                data-on:change="$revealed = false; @get('/')"
+                type="checkbox"
               >
               Hide mastered
             </label>
           </div>
           <button
             class="btn bg-white"
-            data-on:click="$shuffleSeed = Date.now(); $idx = 0; @get('/')"
+            data-on:click="$revealed = false; $shuffleSeed = Date.now();
+          $idx = 0; @get('/')"
             type="button"
           >Shuffle</button>
         </div>
 
-        {{/* The card. */}}
+        {{/* The card: 3D flip on reveal. */}}
         <div
-          class="box bg-pink rounded-[20px] shadow-retro-lg relative flex flex-col
-                 items-center justify-center gap-3.5 min-h-72 md:min-h-[420px] px-6
-                 py-10 text-center"
+          class="flip-scene relative h-80 md:h-[420px] cursor-pointer"
           aria-label="Card front, activate to reveal the answer"
           data-on:click="$revealed = true"
           role="button"
           tabindex="0"
         >
-          {{if .Card.Category}}
-            <span class="tag absolute top-4 left-1/2 -translate-x-1/2">
-              {{.Card.Category}}
-            </span>
-          {{end}}
-          {{if .Card.New}}
-            <span
-              class="tag absolute top-4 right-4"
-              style="background: var(--color-sky)"
-            >New</span>
-          {{end}}
-          {{if .Card.HasImage}}
-            <img
-              class="max-h-52 md:max-h-64 rounded-xl border-2 border-ink"
-              alt="Card front image"
-              src="/cards/{{.Card.ID}}/media/image"
+          <div
+            class="flip-card relative h-full w-full"
+            data-style:transform="$revealed ? 'rotateY(180deg)' : ''"
+          >
+            <div
+              class="flip-face box bg-pink rounded-[20px] shadow-retro-lg absolute
+                     inset-0 overflow-hidden flex flex-col items-center
+                     justify-center gap-3.5 px-6 py-8 text-center"
             >
-          {{end}}
-          {{if .Card.HasAudio}}
-            <audio
-              class="w-full max-w-sm"
-              controls
-              src="/cards/{{.Card.ID}}/media/audio"
-            ></audio>
-          {{end}}
-          <h1
-            class="m-0 font-semibold text-[26px] md:text-[38px] leading-tight
-                   whitespace-pre-line max-w-[560px]"
-          >{{.Card.Front}}</h1>
-          <p
-            class="m-0 text-base md:text-lg whitespace-pre-line border-t-2
-                   border-ink pt-3 w-full max-w-[560px]"
-            data-show="$revealed"
-            style="display: none"
-          >{{.Card.Back}}</p>
-          <span
-            class="text-[13px]"
-            data-show="!$revealed"
-          >Tap to reveal answer</span>
+              {{if .Card.Category}}
+                <span class="tag absolute top-4 left-1/2 -translate-x-1/2">
+                  {{.Card.Category}}
+                </span>
+              {{end}}
+              {{if .Card.New}}
+                <span
+                  class="tag absolute top-4 right-4"
+                  style="background: var(--color-sky)"
+                >New</span>
+              {{end}}
+              {{if .Card.HasImage}}
+                <img
+                  class="max-h-40 md:max-h-52 rounded-xl border-2 border-ink"
+                  alt="Card front image"
+                  src="/cards/{{.Card.ID}}/media/image"
+                >
+              {{end}}
+              {{if .Card.HasAudio}}
+                <audio
+                  class="w-full max-w-sm"
+                  controls
+                  src="/cards/{{.Card.ID}}/media/audio"
+                ></audio>
+              {{end}}
+              <h1
+                class="m-0 font-semibold text-[26px] md:text-[34px] leading-tight
+                       whitespace-pre-line max-w-[560px]"
+              >{{.Card.Front}}</h1>
+              <span class="text-[13px]">Tap to reveal answer</span>
+            </div>
+            <div
+              class="flip-face flip-back box bg-mint rounded-[20px] shadow-retro-lg
+                     absolute inset-0 overflow-hidden flex items-center
+                     justify-center px-6 py-8 text-center"
+            >
+              <p
+                class="m-0 text-lg md:text-xl whitespace-pre-line max-w-[560px]"
+              >{{.Card.Back}}</p>
+            </div>
+          </div>
         </div>
 
         {{/* Grade buttons, shown after the reveal. */}}
@@ -119,21 +136,21 @@
         {{/* Position bar with working paging. */}}
         <div class="box flex items-center justify-between px-3.5 py-2.5 mt-3.5">
           <button
-            class="btn {{if le .Idx 0}}opacity-50 pointer-events-none{{end}} bg-white"
+            class="btn bg-white {{if le .Idx 0}}opacity-50 pointer-events-none{{end}}"
             data-on:click="$idx = $idx - 1; $revealed = false; @get('/')"
             type="button"
           >← Previous</button>
           <span class="text-xs">{{.Position}}</span>
           <button
-            class="btn
-                   {{if ge .Idx (sub .Count 1)}}opacity-50 pointer-events-none{{end}} bg-white"
+            class="btn bg-white
+                   {{if ge .Idx (sub .Count 1)}}opacity-50 pointer-events-none{{end}}"
             data-on:click="$idx = $idx + 1; $revealed = false; @get('/')"
             type="button"
           >Next →</button>
         </div>
 
-        {{/* Mobile-only stats row; desktop has the sidebar. */}}
-        <div class="flex gap-3 mt-3.5 md:hidden">
+        {{/* Mobile stats: all four pills in a 2x2 grid. */}}
+        <div class="grid grid-cols-2 gap-3 mt-3.5 md:hidden">
           <div class="box stat">
             <div>
               <small>Total</small>
@@ -144,6 +161,18 @@
             <div>
               <small>Mastered</small>
               <b>{{.Stats.Mastered}}</b>
+            </div>
+          </div>
+          <div class="box stat" style="background: var(--color-rose)">
+            <div>
+              <small>In Progress</small>
+              <b>{{.Stats.InProgress}}</b>
+            </div>
+          </div>
+          <div class="box stat" style="background: var(--color-sky)">
+            <div>
+              <small>Not Started</small>
+              <b>{{.Stats.NotStarted}}</b>
             </div>
           </div>
         </div>
@@ -189,7 +218,7 @@
                 type="button"
               >Review anyway</button>
             {{end}}
-            <a class="btn bg-white" href="/cards/new">Add new cards</a>
+            <a class="btn-sun" href="/cards/new">Add new cards</a>
             {{if gt .Stats.Total 0}}{{template "reset-confirm" .}}{{end}}
           </div>
         </div>
@@ -203,6 +232,24 @@
       {{end}}
     </aside>
   </div>
+{{end}}
+
+{{define "reset-confirm"}}
+  {{/* Two-step confirmation, toggled by a local signal. */}}
+  <button
+    class="btn bg-white"
+    data-on:click="$confirm = true"
+    data-show="!$confirm"
+    type="button"
+  >Reset progress</button>
+  <button
+    class="btn"
+    data-on:click="@post('/study/reset')"
+    data-show="$confirm"
+    style="display: none;
+           background: var(--color-rose)"
+    type="button"
+  >Really reset?</button>
 {{end}}
 
 {{define "statsBox"}}
@@ -237,28 +284,6 @@
       <i class="size-6 rounded-full border-2 border-ink bg-pink"></i>
     </div>
   </div>
-{{end}}
-
-{{define "reset-confirm"}}
-  {{/* Two-step confirmation, toggled by a local signal. */}}
-  <button
-    class="btn bg-white"
-    data-on:click="$confirm = true"
-    data-show="!$confirm"
-    type="button"
-  >Reset progress</button>
-  <button
-    class="btn bg-white"
-    data-on:click="@post('/study/reset')"
-    data-show="$confirm"
-    style="display: none"
-    type="button"
-  >
-    <span
-      class="rounded-full px-2 py-0.5"
-      style="background: var(--color-rose)"
-    >Really reset?</span>
-  </button>
 {{end}}
 
 {{define "decksBox"}}

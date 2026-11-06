@@ -73,9 +73,11 @@ func (s *Store) Card(id int64) (Card, error) {
 func (s *Store) Cards(q, category, media string) ([]Card, error) {
 	where, args := []string{"1=1"}, []any{}
 	if q != "" {
-		where = append(where, "(front_text LIKE ? OR back_text LIKE ?)")
+		// Match front/back text and category ("tag") names.
+		where = append(where,
+			"(front_text LIKE ? OR back_text LIKE ? OR category LIKE ?)")
 		pat := "%" + q + "%"
-		args = append(args, pat, pat)
+		args = append(args, pat, pat, pat)
 	}
 	if category != "" {
 		where = append(where, "category = ?")

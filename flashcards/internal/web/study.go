@@ -184,7 +184,7 @@ func (s *Server) gradeCard(w http.ResponseWriter, r *http.Request) {
 	}
 	sse := datastar.NewSSE(w, r)
 	if err := sse.PatchSignals([]byte(
-		`{"revealed": false, "idx": ` + strconv.Itoa(d.Idx) + `}`)); err != nil {
+		`{"revealed": false, "idx": 0, "grade": ""}`)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -6,69 +6,82 @@
       class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0
              md:flex md:flex-col"
     >
-      {{template "header" "cards"}}
-      <main class="flex-1 w-full p-4 pt-0 md:px-8 md:pb-8">
-        <div
-          class="box flex flex-wrap items-center justify-between gap-2 px-3.5
-                 py-2.5 mb-4"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <input
-              class="bg-white border-2 border-ink rounded-full px-4 h-11
-                     min-w-48 flex-1 md:flex-none md:w-80 text-[13px]
-                     font-medium outline-none"
-              aria-label="Search cards"
-              data-bind="q"
-              data-on:input__debounce.300ms="@get('/cards')"
-              placeholder="Search prompts, answers, tags"
-              type="search"
-            >
-            {{/* Signal-driven highlight so it survives fragment patches. */}}
-            <div class="flex gap-1.5">
-              <button
-                class="btn min-h-9"
-                data-class="{'bg-white': $media !== '', 'bg-sun': $media === ''}"
-                data-on:click="$media = ''; @get('/cards')"
-                type="button"
-              >All</button>
-              <button
-                class="btn min-h-9"
-                data-class="{'bg-white': $media !== 'text', 'bg-sun': $media === 'text'}"
-                data-on:click="$media = 'text'; @get('/cards')"
-                type="button"
-              >Text</button>
-              <button
-                class="btn min-h-9"
-                data-class="{'bg-white': $media !== 'image', 'bg-sun': $media === 'image'}"
-                data-on:click="$media = 'image'; @get('/cards')"
-                type="button"
-              >Image</button>
-              <button
-                class="btn min-h-9"
-                data-class="{'bg-white': $media !== 'audio', 'bg-sun': $media === 'audio'}"
-                data-on:click="$media = 'audio'; @get('/cards')"
-                type="button"
-              >Audio</button>
+      <div class="mx-auto w-full max-w-6xl px-4 md:px-8">
+        {{template "header" "cards"}}
+        <main class="flex-1 w-full pb-8">
+          <div
+            class="box flex flex-wrap items-center justify-between gap-2 px-3.5
+                   py-2.5 mb-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                class="bg-white border-2 border-ink rounded-full px-4 h-11
+                       min-w-48 flex-1 md:flex-none md:w-72 text-[13px]
+                       font-medium outline-none"
+                aria-label="Search cards"
+                data-bind="q"
+                data-on:input__debounce.300ms="@get('/cards')"
+                placeholder="Search prompts, answers, tags"
+                type="search"
+              >
+              {{/* Signal-driven highlight so it survives fragment patches. */}}
+              <div class="flex gap-1.5">
+                <button
+                  class="btn h-11"
+                  data-class="{'bg-white': $media !== '',
+                    'bg-sun': $media === ''}"
+                  data-on:click="$media = ''; @get('/cards')"
+                  type="button"
+                >All</button>
+                <button
+                  class="btn h-11"
+                  data-class="{'bg-white': $media !== 'text',
+                    'bg-sun': $media === 'text'}"
+                  data-on:click="$media = 'text'; @get('/cards')"
+                  type="button"
+                >Text</button>
+                <button
+                  class="btn h-11"
+                  data-class="{'bg-white': $media !== 'image',
+                    'bg-sun': $media === 'image'}"
+                  data-on:click="$media = 'image'; @get('/cards')"
+                  type="button"
+                >Image</button>
+                <button
+                  class="btn h-11"
+                  data-class="{'bg-white': $media !== 'audio',
+                    'bg-sun': $media === 'audio'}"
+                  data-on:click="$media = 'audio'; @get('/cards')"
+                  type="button"
+                >Audio</button>
+              </div>
+              <div class="relative">
+                <select
+                  class="btn h-11 appearance-none pl-4 pr-9 bg-white"
+                  data-bind="category"
+                  data-on:change="@get('/cards')"
+                >
+                  <option value="">All Categories</option>
+                  {{$sel := .Category}}
+                  {{range .Categories}}
+                    <option
+                      value="{{.Name}}"
+                      {{if eq .Name $sel}}selected{{end}}
+                    >{{.Name}} ({{.Count}})</option>
+                  {{end}}
+                </select>
+                <span
+                  class="pointer-events-none absolute right-3 top-1/2
+                         -translate-y-1/2 text-[10px]"
+                >▾</span>
+              </div>
             </div>
-            <select
-              class="btn appearance-none pr-7 bg-white"
-              data-bind="category"
-              data-on:change="@get('/cards')"
-            >
-              <option value="">All Categories</option>
-              {{$sel := .Category}}
-              {{range .Categories}}
-                <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>
-                  {{.Name}} ({{.Count}})
-                </option>
-              {{end}}
-            </select>
+            <a class="btn-sun" href="/cards/new">+ New card</a>
           </div>
-          <a class="btn-sun" href="/cards/new">+ New card</a>
-        </div>
 
-        {{template "cards-list" .}}
-      </main>
+          {{template "cards-list" .}}
+        </main>
+      </div>
     </body>
   </html>
 {{end}}
@@ -89,6 +102,7 @@
           data-on:click="$deleteIds = []"
           data-show="$deleteIds.length > 0"
           style="display: none"
+          type="button"
         >
           <span data-text="$deleteIds.length + ' selected'"></span>
           · Clear
@@ -111,18 +125,23 @@
 {{else}}
   <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {{range .Cards}}
-      <li id="card-{{.ID}}" class="box overflow-hidden flex flex-col relative">
+      <li
+        id="card-{{.ID}}"
+        class="box overflow-hidden flex flex-col relative select-none"
+      >
         <button
           class="absolute top-2.5 right-2.5 z-10 size-5 rounded-full
                  border-2 border-ink text-[10px] grid place-items-center"
           aria-label="Select for deletion"
           data-class="{'bg-white': !$deleteIds.includes({{.ID}}),
-            'bg-sun': $deleteIds.includes({{.ID}})}"
-          data-on:click="$deleteIds.push({{.ID}})"
+                'bg-sun': $deleteIds.includes({{.ID}})}"
+          data-on:click="$deleteIds.includes({{.ID}})
+                ? $deleteIds = $deleteIds.filter(i => i !== {{.ID}})
+                : $deleteIds.push({{.ID}});"
           type="button"
         >✓</button>
         <div
-          class="flex items-center justify-between px-3.5 py-2
+          class="flex items-center justify-between gap-2 pl-3.5 pr-9 py-2
                  border-b-2 border-ink text-[11px] font-semibold"
           style="background: {{mediaColor .}}"
         >
@@ -130,17 +149,20 @@
           <span>{{statusLabel .Status}}</span>
         </div>
         <div class="p-3.5 flex flex-col gap-1.5 flex-1">
+          {{if .Category}}
+            <span class="tag mt-1" style="background: var(--color-sun)">
+              {{.Category}}
+            </span>
+          {{end}}
           <b class="text-base">{{.Front}}</b>
           <span class="text-xs whitespace-pre-line">{{.Back}}</span>
-          {{if .Category}}
-            <span class="tag mt-1">{{.Category}}</span>
-          {{end}}
         </div>
         <div class="flex gap-2 p-3 pt-0 mt-auto">
-          <a class="btn min-h-9 bg-white" href="/cards/{{.ID}}/edit">Edit</a>
+          <a class="btn bg-white min-h-9" href="/cards/{{.ID}}/edit">Edit</a>
         </div>
       </li>
     {{end}}
   </ul>
 {{end}}
+</div>
 {{end}}

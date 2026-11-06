@@ -23,6 +23,10 @@ func parseTime(ts string) time.Time {
 // masteredDays mirrors srs.MasteredDays in SQL filters.
 const masteredDays = 21
 
+// timeFmt matches SQLite strftime('%Y-%m-%dT%H:%M:%fZ') output (fixed
+// millisecond precision) so due_at string comparisons are exact.
+const timeFmt = "2006-01-02T15:04:05.000Z"
+
 // StudyCard is a card in the study queue with its scheduling state.
 type StudyCard struct {
 	Card
@@ -215,7 +219,7 @@ func (s *Store) Review(cardID int64, g srs.Grade, now time.Time) (srs.State, err
 			due_at=excluded.due_at, interval_days=excluded.interval_days,
 			ease=excluded.ease, repetitions=excluded.repetitions,
 			lapses=excluded.lapses`,
-		cardID, next.DueAt.UTC().Format(time.RFC3339Nano), next.Interval,
+		cardID, next.DueAt.UTC().Format(timeFmt), next.Interval,
 		next.Ease, next.Repetitions, next.Lapses); err != nil {
 		return srs.State{}, err
 	}
