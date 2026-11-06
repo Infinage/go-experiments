@@ -27,25 +27,25 @@
             <div class="flex gap-1.5">
               <button
                 class="btn min-h-9"
-                data-class:bg-sun="$media === ''"
+                data-class="{'bg-white': $media !== '', 'bg-sun': $media === ''}"
                 data-on:click="$media = ''; @get('/cards')"
                 type="button"
               >All</button>
               <button
                 class="btn min-h-9"
-                data-class:bg-sun="$media === 'text'"
+                data-class="{'bg-white': $media !== 'text', 'bg-sun': $media === 'text'}"
                 data-on:click="$media = 'text'; @get('/cards')"
                 type="button"
               >Text</button>
               <button
                 class="btn min-h-9"
-                data-class:bg-sun="$media === 'image'"
+                data-class="{'bg-white': $media !== 'image', 'bg-sun': $media === 'image'}"
                 data-on:click="$media = 'image'; @get('/cards')"
                 type="button"
               >Image</button>
               <button
                 class="btn min-h-9"
-                data-class:bg-sun="$media === 'audio'"
+                data-class="{'bg-white': $media !== 'audio', 'bg-sun': $media === 'audio'}"
                 data-on:click="$media = 'audio'; @get('/cards')"
                 type="button"
               >Audio</button>
@@ -67,44 +67,57 @@
           <a class="btn-sun" href="/cards/new">+ New card</a>
         </div>
 
-        <div
-          id="cards-list"
-          data-signals="{'deleteIds': [], 'media': {{mediaInit .}}}"
-        >{{template "cards-list" .}}</div>
+        {{template "cards-list" .}}
       </main>
     </body>
   </html>
 {{end}}
 
 {{define "cards-list"}}
-  <div class="flex items-center justify-between mb-3">
-    <span class="text-xs font-semibold">
-      {{len .Cards}}
-      card{{if ne (len .Cards) 1}}s{{end}}
-    </span>
-    <button
-      class="btn"
-      data-on:click="@delete('/cards')"
-      data-show="$deleteIds.length > 0"
-      style="display: none"
-      type="button"
-    >Delete selected</button>
-  </div>
-  {{if not .Cards}}
-    <div class="box p-8 text-center text-sm">
-      No cards{{if or .Query .Category .Media}}
-      match your filter{{end}}.
-    <a class="underline font-semibold" href="/cards/new">Add one </a>.
-  </div>
+  <div
+    id="cards-list"
+    data-signals="{'deleteIds': [], 'media': {{mediaInit .}}}"
+  >
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-xs font-semibold">
+        {{len .Cards}}
+        card{{if ne (len .Cards) 1}}s{{end}}
+      </span>
+      <div class="flex items-center gap-2">
+        <button
+          class="btn bg-white"
+          data-on:click="$deleteIds = []"
+          data-show="$deleteIds.length > 0"
+          style="display: none"
+        >
+          <span data-text="$deleteIds.length + ' selected'"></span>
+          · Clear
+        </button>
+        <button
+          class="btn bg-white"
+          data-on:click="@delete('/cards')"
+          data-show="$deleteIds.length > 0"
+          style="display: none"
+          type="button"
+        >Delete selected</button>
+      </div>
+    </div>
+    {{if not .Cards}}
+      <div class="box p-8 text-center text-sm">
+        No cards{{if or .Query .Category .Media}}
+        match your filter{{end}}.
+      <a class="underline font-semibold" href="/cards/new">Add one </a>.
+    </div>
 {{else}}
   <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {{range .Cards}}
       <li id="card-{{.ID}}" class="box overflow-hidden flex flex-col relative">
         <button
           class="absolute top-2.5 right-2.5 z-10 size-5 rounded-full
-                 border-2 border-ink bg-white text-[10px] grid place-items-center"
+                 border-2 border-ink text-[10px] grid place-items-center"
           aria-label="Select for deletion"
-          data-class:bg-sun="$deleteIds.includes({{.ID}})"
+          data-class="{'bg-white': !$deleteIds.includes({{.ID}}),
+            'bg-sun': $deleteIds.includes({{.ID}})}"
           data-on:click="$deleteIds.push({{.ID}})"
           type="button"
         >✓</button>
@@ -124,7 +137,7 @@
           {{end}}
         </div>
         <div class="flex gap-2 p-3 pt-0 mt-auto">
-          <a class="btn min-h-9" href="/cards/{{.ID}}/edit">Edit</a>
+          <a class="btn min-h-9 bg-white" href="/cards/{{.ID}}/edit">Edit</a>
         </div>
       </li>
     {{end}}

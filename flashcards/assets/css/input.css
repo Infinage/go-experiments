@@ -14,50 +14,56 @@
   --shadow-retro-lg: 4px 4px 0 var(--color-ink);
 }
 
-@layer components {
-  /* bx: white bordered box with hard offset shadow */
-  .box {
-    @apply bg-white border-2 border-ink rounded-[14px] shadow-retro;
-  }
-  /* bt: pill button, min 44px touch target */
-  .btn {
-    @apply bg-white border-2 border-ink rounded-full px-3.5 min-h-11
-      font-semibold text-xs text-ink shadow-retro inline-flex items-center
-      justify-center gap-1.5 cursor-pointer;
-  }
-  .btn-sun {
-    @apply bg-sun border-2 border-ink rounded-full px-3.5 min-h-11
-      font-semibold text-xs text-ink shadow-retro inline-flex items-center
-      justify-center gap-1.5 cursor-pointer;
-  }
-  /* tg: small pill tag */
-  .tag {
-    @apply border-[1.5px] border-ink rounded-full px-2.5 py-0.5 text-[11px]
-      font-semibold bg-white w-fit;
-  }
-  /* st: statistic row inside a box (box is expanded here because v4
-    can't @apply other component classes) */
-  .stat {
-    @apply bg-white border-2 border-ink rounded-[14px] shadow-retro flex
-      items-center justify-between px-3 py-2.5;
-  }
-  .stat small {
-    @apply block text-[11px] font-medium;
-  }
-  .stat b {
-    @apply text-[22px] leading-tight;
-  }
-  /* lg: logo dot */
-  .logo-dot {
-    @apply size-7 rounded-full bg-sun border-2 border-ink inline-block;
-  }
-  /* pb: thin progress track */
-  .track {
-    @apply h-2 rounded-full border border-ink bg-white overflow-hidden;
-  }
-  .track > div {
-    @apply h-full bg-mint;
-  }
+/* Retro utilities (registered via @utility so responsive variants like
+   md:btn work). Names follow the mockup's CSS classes. */
+
+/* bx: white bordered box with hard offset shadow */
+@utility box {
+  @apply bg-white border-2 border-ink rounded-[14px] shadow-retro;
+}
+
+/* bt: pill button, min 44px touch target */
+@utility btn {
+  @apply border-2 border-ink rounded-full px-3.5 min-h-11 font-semibold
+    text-xs text-ink shadow-retro inline-flex items-center justify-center
+    gap-1.5 whitespace-nowrap cursor-pointer;
+}
+
+@utility btn-sun {
+  @apply border-2 border-ink rounded-full px-3.5 min-h-11 font-semibold
+    text-xs text-ink shadow-retro inline-flex items-center justify-center
+    gap-1.5 whitespace-nowrap cursor-pointer;
+}
+
+/* tg: small pill tag */
+@utility tag {
+  @apply border-[1.5px] border-ink rounded-full px-2.5 py-0.5 text-[11px]
+    font-semibold bg-white w-fit;
+}
+
+/* st: statistic row inside a box */
+@utility stat {
+  @apply bg-white border-2 border-ink rounded-[14px] shadow-retro flex
+    items-center justify-between px-3 py-2.5;
+}
+.stat small {
+  @apply block text-[11px] font-medium;
+}
+.stat b {
+  @apply text-[22px] leading-tight;
+}
+
+/* lg: logo dot */
+@utility logo-dot {
+  @apply size-7 rounded-full bg-sun border-2 border-ink inline-block;
+}
+
+/* pb: thin progress track */
+@utility track {
+  @apply h-2 rounded-full border border-ink bg-white overflow-hidden;
+}
+.track > div {
+  @apply h-full bg-mint;
 }
 
 /* Poppins, bundled locally (latin subset, SIL OFL 1.1 — see
