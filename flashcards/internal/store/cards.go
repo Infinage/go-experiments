@@ -111,6 +111,45 @@ func (s *Store) Cards(q, category, media string) ([]Card, error) {
 	return out, rows.Err()
 }
 
+// CardsByIDs returns the given cards with their study state, in the
+// database's id order (callers reorder as needed). Unknown ids are skipped.
+func (s *Store) CardsByIDs(ids []int64) ([]StudyCard, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, masteredDays)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.Query(`SELECT `+cardCols+`, `+cardStatusExpr+`,
+		IFNULL(rs.due_at, ''), IFNULL(rs.interval_days, 0),
+		IFNULL(rs.ease, 2.0), IFNULL(rs.repetitions, 0),
+		IFNULL(rs.lapses, 0), rs.card_id IS NULL
+		FROM cards
+		LEFT JOIN review_state rs ON rs.card_id = cards.id
+		WHERE cards.id IN (`+ph+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []StudyCard
+	for rows.Next() {
+		var sc StudyCard
+		var due string
+		if err := rows.Scan(&sc.ID, &sc.Front, &sc.Back, &sc.Category,
+			&sc.HasImage, &sc.HasAudio, &sc.CreatedAt, &sc.UpdatedAt,
+			&sc.Status, &due, &sc.State.Interval, &sc.State.Ease,
+			&sc.State.Repetitions, &sc.State.Lapses, &sc.New); err != nil {
+			return nil, err
+		}
+		sc.State.DueAt = parseTime(due)
+		out = append(out, sc)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) UpdateCard(id int64, front, back, category string) error {
 	res, err := s.db.Exec(
 		`UPDATE cards SET front_text=?, back_text=?, category=?, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?`,

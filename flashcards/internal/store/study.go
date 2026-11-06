@@ -86,7 +86,7 @@ func (s *Store) Queue(hideMastered, includeAll bool) ([]StudyCard, error) {
 	}
 	rows, err := s.db.Query(`SELECT `+cardCols+`,
 		IFNULL(rs.due_at, ''), IFNULL(rs.interval_days, 0),
-		IFNULL(rs.ease, 2.5), IFNULL(rs.repetitions, 0), IFNULL(rs.lapses, 0),
+		IFNULL(rs.ease, 2.0), IFNULL(rs.repetitions, 0), IFNULL(rs.lapses, 0),
 		rs.card_id IS NULL
 		FROM cards
 		LEFT JOIN review_state rs ON rs.card_id = cards.id

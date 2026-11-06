@@ -71,26 +71,30 @@
           style="display: none"
         >
           {{range $g := gradeChoices}}
-            <div class="flex flex-col items-center gap-1">
-              <button
-                class="btn bg-white hover:bg-sun"
-                data-attr:disabled="$anyBusy"
-                data-indicator:busy-{{$g.Value}}
-                data-on:click="$grade = '{{$g.Value}}';
-            @post('/study/{{$.Card.ID}}/grade')"
-                type="button"
-              >
-                <span
-                  class="spinner"
-                  data-show="$busy{{$g.Label}}"
-                  style="display: none"
-                ></span>
-                {{$g.Label}}
-              </button>
+            <button
+              class="btn bg-white hover:bg-sun"
+              title="{{$g.Hint}}"
+              data-attr:disabled="$anyBusy"
+              data-indicator:busy-{{$g.Value}}
+              data-on:click="{{if eq $g.Value "forgot"}}
+                if ($requeuedIds.includes({{$.Card.ID}})) {
+                  $requeuedIds = $requeuedIds.filter(
+                    i => i !== {{$.Card.ID}});
+                  $droppedIds.push({{$.Card.ID}});
+                } else {
+                  $requeuedIds.push({{$.Card.ID}});
+                };{{end}}
+                $grade = '{{$g.Value}}';
+                @post('/study/{{$.Card.ID}}/grade')"
+              type="button"
+            >
               <span
-                class="text-[10px] leading-tight text-center text-ink/70"
-              >{{$g.Hint}}</span>
-            </div>
+                class="spinner"
+                data-show="$busy{{$g.Label}}"
+                style="display: none"
+              ></span>
+              {{$g.Label}}
+            </button>
           {{end}}
         </div>
 
@@ -261,7 +265,7 @@
   <div class="box p-4 flex flex-col gap-3">
     <b class="text-[15px]">Decks</b>
     {{/* One segmented bar per deck: mastered (mint), in progress (sky),
-                     not started (pink). Scrolls with the retro scrollbar. */}}
+                           not started (pink). Scrolls with the retro scrollbar. */}}
     <div class="flex flex-col gap-3 max-h-56 overflow-y-auto retro-scroll pr-1">
       {{range .}}
         <div class="flex flex-col gap-1">

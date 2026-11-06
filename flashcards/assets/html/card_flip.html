@@ -31,6 +31,9 @@
             style="background: var(--color-sky)"
           >New</span>
         {{end}}
+        {{if .Category}}
+          <div class="shrink-0 h-7"></div>
+        {{end}}
         {{if .LiveMedia}}
           <img
             class="shrink-0 max-h-[38%] rounded-xl border-2 border-ink"

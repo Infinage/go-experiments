@@ -9,7 +9,7 @@ var now = time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 
 func TestNewCardDueImmediately(t *testing.T) {
 	s := New()
-	if !s.DueAt.IsZero() || s.Interval != 0 || s.Ease != 2.5 {
+	if !s.DueAt.IsZero() || s.Interval != 0 || s.Ease != 2.0 {
 		t.Fatalf("new state: %+v", s)
 	}
 }
@@ -24,10 +24,10 @@ func TestFirstReviewsUseLearningSteps(t *testing.T) {
 		t.Fatalf("second good: %+v", s)
 	}
 	s = Review(s, Medium, now)
-	if s.Interval != 15 { // 6 * 2.5
+	if s.Interval != 12 { // 6 * 2.0
 		t.Fatalf("third good: %+v", s)
 	}
-	if want := now.AddDate(0, 0, 15); !s.DueAt.Equal(want) {
+	if want := now.AddDate(0, 0, 12); !s.DueAt.Equal(want) {
 		t.Fatalf("due %v, want %v", s.DueAt, want)
 	}
 }
@@ -42,7 +42,7 @@ func TestAgainResetsAndLapses(t *testing.T) {
 		t.Fatalf("again due soon: %v", s.DueAt)
 	}
 	// Ease dropped.
-	if s.Ease >= 2.5 {
+	if s.Ease >= 2.0 {
 		t.Fatalf("ease not reduced: %v", s.Ease)
 	}
 }
@@ -56,23 +56,23 @@ func TestEaseFloorsAt1_3(t *testing.T) {
 }
 
 func TestHardGrowsSlowly(t *testing.T) {
-	s := State{Ease: 2.5, Interval: 10, Repetitions: 3}
+	s := State{Ease: 2.0, Interval: 10, Repetitions: 3}
 	s = Review(s, Hard, now)
 	if s.Interval != 12 { // 10 * 1.2
 		t.Fatalf("hard interval: %d", s.Interval)
 	}
-	if s.Ease != 2.35 {
+	if s.Ease != 1.85 {
 		t.Fatalf("hard ease: %v", s.Ease)
 	}
 }
 
 func TestEasyBoosts(t *testing.T) {
-	s := State{Ease: 2.5, Interval: 10, Repetitions: 3}
+	s := State{Ease: 2.0, Interval: 10, Repetitions: 3}
 	s = Review(s, Easy, now)
-	if s.Interval != 32 { // int(10 * 2.5 * 1.3)
+	if s.Interval != 26 { // int(10 * 2.0 * 1.3)
 		t.Fatalf("easy interval: %d", s.Interval)
 	}
-	if s.Ease != 2.65 {
+	if s.Ease != 2.15 {
 		t.Fatalf("easy ease: %v", s.Ease)
 	}
 }

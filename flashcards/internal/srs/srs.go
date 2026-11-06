@@ -22,9 +22,13 @@ type State struct {
 	Lapses      int
 }
 
+// defaultEase is the SM-2 ease multiplier for fresh cards. Chosen so
+// Medium intervals grow 1 → 6 → 12 → 24 days (mastered on the 4th).
+const defaultEase = 2.0
+
 // New returns the initial state for an unseen card: due immediately.
 func New() State {
-	return State{DueAt: time.Time{}, Interval: 0, Ease: 2.5}
+	return State{DueAt: time.Time{}, Interval: 0, Ease: defaultEase}
 }
 
 // MasteredDays is the interval (in days) at which a card counts as
@@ -42,11 +46,13 @@ func Review(s State, g Grade, now time.Time) State {
 	next := s
 	switch g {
 	case Forgot:
+		// Requeue in-session: the card stays due now; the study page
+		// appends it to the end of the current pass.
 		next.Repetitions = 0
 		next.Lapses++
 		next.Interval = 0
 		next.Ease = clamp(s.Ease - 0.20)
-		next.DueAt = now.Add(10 * time.Minute) // relearn same session
+		next.DueAt = now
 	case Hard:
 		next.Ease = clamp(s.Ease - 0.15)
 		if s.Repetitions == 0 {

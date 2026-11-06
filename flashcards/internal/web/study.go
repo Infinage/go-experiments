@@ -19,6 +19,12 @@ type studySignals struct {
 	HideMastered bool   `json:"hideMastered"`
 	Category     string `json:"category"`
 	Grade        string `json:"grade"`
+	// RequeuedIDs are cards forgotten once this pass; the queue
+	// re-appends them at the end, in the order they were forgotten.
+	RequeuedIDs []int64 `json:"requeuedIds"`
+	// DroppedIDs are cards forgotten twice in one pass; they are
+	// excluded from the current pass (still due next session).
+	DroppedIDs []int64 `json:"droppedIds"`
 	// Idx is the position within the queue (0-based) for Prev/Next.
 	Idx int `json:"idx"`
 	// ShuffleSeed randomises the queue order; stable while it doesn't
@@ -91,12 +97,13 @@ func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
 
 // studyData builds the study view model from the request signals.
 func (s *Server) studyData(sig studySignals) (*studyData, error) {
-	q, err := s.queue(sig.HideMastered, sig.Category, sig.Force)
+	q, err := s.queue(sig.HideMastered, sig.Category, sig.Force,
+		sig.RequeuedIDs, sig.DroppedIDs)
 	if err != nil {
 		return nil, err
 	}
 	if sig.ShuffleSeed > 0 {
-		shuffle(q, sig.ShuffleSeed)
+		shuffle(q[:len(q)-len(sig.RequeuedIDs)], sig.ShuffleSeed)
 	}
 	// Clamp the position into the (possibly shorter) queue.
 	idx := sig.Idx
@@ -157,11 +164,56 @@ func shuffle(q []store.StudyCard, seed int64) {
 	})
 }
 
-// queue fetches the due queue, filtered by category when given.
-func (s *Server) queue(hideMastered bool, category string, force bool) ([]store.StudyCard, error) {
+// queue fetches the due queue, filtered by category when given, with
+// requeued (forgotten) cards appended at the end in requeue order.
+func (s *Server) queue(hideMastered bool, category string, force bool,
+	requeued, dropped []int64) ([]store.StudyCard, error) {
 	q, err := s.store.Queue(hideMastered, force)
 	if err != nil {
 		return nil, err
+	}
+	excl := make(map[int64]bool, len(requeued)+len(dropped))
+	for _, id := range dropped {
+		excl[id] = true
+	}
+	if len(excl) > 0 {
+		filtered := q[:0]
+		for _, c := range q {
+			if !excl[c.ID] {
+				filtered = append(filtered, c)
+			}
+		}
+		q = filtered
+	}
+	if len(requeued) > 0 {
+		filtered := q[:0]
+		for _, c := range q {
+			if !excl[c.ID] {
+				filtered = append(filtered, c)
+			}
+		}
+		q = filtered
+		// Fetch and append the requeued cards, in requeue order, still
+		// honouring the filters.
+		byID := make(map[int64]store.StudyCard, len(requeued))
+		if len(requeued) > 0 {
+			all, err := s.store.CardsByIDs(requeued)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range all {
+				if !hideMastered || !srs.Mastered(c.State) {
+					byID[c.ID] = c
+				}
+			}
+		}
+		for _, id := range requeued {
+			if c, ok := byID[id]; ok {
+				if category == "" || c.Category == category {
+					q = append(q, c)
+				}
+			}
+		}
 	}
 	if category == "" {
 		return q, nil

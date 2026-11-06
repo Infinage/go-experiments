@@ -87,3 +87,25 @@ func TestResetProgress(t *testing.T) {
 		t.Fatalf("review_log rows: %d", n)
 	}
 }
+
+func TestCardsByIDs(t *testing.T) {
+	s := mustStore(t)
+	a, _ := s.CreateCard("q1", "", "web")
+	b, _ := s.CreateCard("q2", "", "web")
+	s.Review(a, srs.Medium, time.Now())
+
+	cs, err := s.CardsByIDs([]int64{a, b, 999})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 2 {
+		t.Fatalf("got %d cards", len(cs))
+	}
+	byID := map[int64]StudyCard{cs[0].ID: cs[0], cs[1].ID: cs[1]}
+	if byID[a].State.Interval != 1 {
+		t.Fatalf("state not loaded: %+v", byID[a])
+	}
+	if byID[b].New != true {
+		t.Fatal("unreviewed card should be New")
+	}
+}

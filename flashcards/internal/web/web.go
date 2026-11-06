@@ -29,7 +29,7 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 		// gradeChoices lists the study grade buttons with their hints.
 		"gradeChoices": func() []gradeChoice {
 			return []gradeChoice{
-				{"forgot", "Forgot", "Didn't recall — returns in 10 minutes"},
+				{"forgot", "Forgot", "Didn't recall — one retry at the end of this pass"},
 				{"hard", "Hard", "Recalled with effort — due tomorrow"},
 				{"medium", "Medium", "Recalled — due in a few days"},
 				{"easy", "Easy", "Recalled easily — mastered sooner"},
