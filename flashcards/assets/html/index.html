@@ -1,0 +1,26 @@
+{{define "Study"}}
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>{{template "head"}}</head>
+    <body
+      class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0
+             md:flex md:flex-col md:min-h-screen"
+      data-signals="{'hideMastered': false, 'revealed': false, 'idx': 0,
+        'shuffleSeed': 0, 'force': false, 'confirm': false}"
+    >
+      {{template "header" "study"}}
+      <main
+        class="flex-1 w-full p-4 pt-0 md:px-8 md:pb-8 md:flex md:gap-5
+               md:items-stretch"
+      >
+        <div id="study-area" class="flex-1 min-w-0">{{template "study-area" .}}</div>
+        <aside class="hidden md:flex md:flex-col md:gap-3 md:w-80 md:flex-none">
+          {{template "statsBox" .Stats}}
+          {{if .Decks}}
+            {{template "decksBox" .Decks}}
+          {{end}}
+        </aside>
+      </main>
+    </body>
+  </html>
+{{end}}

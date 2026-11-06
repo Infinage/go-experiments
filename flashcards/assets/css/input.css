@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* Retro theme tokens, taken from the design mockup */
+@theme {
+  --color-ink: #2b1208;
+  --color-cream: #f7f3ec;
+  --color-sun: #ffc93c;
+  --color-pink: #ff8ae2;
+  --color-sky: #94a9f0;
+  --color-mint: #4fddc7;
+  --color-rose: #f0719f;
+  --font-sans: Poppins, ui-sans-serif, system-ui, sans-serif;
+  --shadow-retro: 3px 3px 0 var(--color-ink);
+  --shadow-retro-lg: 4px 4px 0 var(--color-ink);
+}
+
+@layer components {
+  /* bx: white bordered box with hard offset shadow */
+  .box {
+    @apply bg-white border-2 border-ink rounded-[14px] shadow-retro;
+  }
+  /* bt: pill button, min 44px touch target */
+  .btn {
+    @apply bg-white border-2 border-ink rounded-full px-3.5 min-h-11
+      font-semibold text-xs text-ink shadow-retro inline-flex items-center
+      justify-center gap-1.5 cursor-pointer;
+  }
+  .btn-sun {
+    @apply bg-sun border-2 border-ink rounded-full px-3.5 min-h-11
+      font-semibold text-xs text-ink shadow-retro inline-flex items-center
+      justify-center gap-1.5 cursor-pointer;
+  }
+  /* tg: small pill tag */
+  .tag {
+    @apply border-[1.5px] border-ink rounded-full px-2.5 py-0.5 text-[11px]
+      font-semibold bg-white w-fit;
+  }
+  /* st: statistic row inside a box (box is expanded here because v4
+    can't @apply other component classes) */
+  .stat {
+    @apply bg-white border-2 border-ink rounded-[14px] shadow-retro flex
+      items-center justify-between px-3 py-2.5;
+  }
+  .stat small {
+    @apply block text-[11px] font-medium;
+  }
+  .stat b {
+    @apply text-[22px] leading-tight;
+  }
+  /* lg: logo dot */
+  .logo-dot {
+    @apply size-7 rounded-full bg-sun border-2 border-ink inline-block;
+  }
+  /* pb: thin progress track */
+  .track {
+    @apply h-2 rounded-full border border-ink bg-white overflow-hidden;
+  }
+  .track > div {
+    @apply h-full bg-mint;
+  }
+}
+
+/* Poppins, bundled locally (latin subset, SIL OFL 1.1 — see
+   assets/fonts/OFL.txt). */
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/poppins-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/poppins-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/poppins-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/assets/fonts/poppins-700.woff2") format("woff2");
+}

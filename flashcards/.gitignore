@@ -1,2 +1,4 @@
-flashcards.db
+bin/
+*.db
+*.db-*
 tmp/

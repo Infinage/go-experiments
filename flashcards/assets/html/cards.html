@@ -1,0 +1,133 @@
+{{define "Cards"}}
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>{{template "head"}}</head>
+    <body
+      class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0
+             md:flex md:flex-col"
+    >
+      {{template "header" "cards"}}
+      <main class="flex-1 w-full p-4 pt-0 md:px-8 md:pb-8">
+        <div
+          class="box flex flex-wrap items-center justify-between gap-2 px-3.5
+                 py-2.5 mb-4"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              class="bg-white border-2 border-ink rounded-full px-4 h-11
+                     min-w-48 flex-1 md:flex-none md:w-80 text-[13px]
+                     font-medium outline-none"
+              aria-label="Search cards"
+              data-bind="q"
+              data-on:input__debounce.300ms="@get('/cards')"
+              placeholder="Search prompts, answers, tags"
+              type="search"
+            >
+            {{/* Signal-driven highlight so it survives fragment patches. */}}
+            <div class="flex gap-1.5">
+              <button
+                class="btn min-h-9"
+                data-class:bg-sun="$media === ''"
+                data-on:click="$media = ''; @get('/cards')"
+                type="button"
+              >All</button>
+              <button
+                class="btn min-h-9"
+                data-class:bg-sun="$media === 'text'"
+                data-on:click="$media = 'text'; @get('/cards')"
+                type="button"
+              >Text</button>
+              <button
+                class="btn min-h-9"
+                data-class:bg-sun="$media === 'image'"
+                data-on:click="$media = 'image'; @get('/cards')"
+                type="button"
+              >Image</button>
+              <button
+                class="btn min-h-9"
+                data-class:bg-sun="$media === 'audio'"
+                data-on:click="$media = 'audio'; @get('/cards')"
+                type="button"
+              >Audio</button>
+            </div>
+            <select
+              class="btn appearance-none pr-7 bg-white"
+              data-bind="category"
+              data-on:change="@get('/cards')"
+            >
+              <option value="">All Categories</option>
+              {{$sel := .Category}}
+              {{range .Categories}}
+                <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>
+                  {{.Name}} ({{.Count}})
+                </option>
+              {{end}}
+            </select>
+          </div>
+          <a class="btn-sun" href="/cards/new">+ New card</a>
+        </div>
+
+        <div
+          id="cards-list"
+          data-signals="{'deleteIds': [], 'media': {{mediaInit .}}}"
+        >{{template "cards-list" .}}</div>
+      </main>
+    </body>
+  </html>
+{{end}}
+
+{{define "cards-list"}}
+  <div class="flex items-center justify-between mb-3">
+    <span class="text-xs font-semibold">
+      {{len .Cards}}
+      card{{if ne (len .Cards) 1}}s{{end}}
+    </span>
+    <button
+      class="btn"
+      data-on:click="@delete('/cards')"
+      data-show="$deleteIds.length > 0"
+      style="display: none"
+      type="button"
+    >Delete selected</button>
+  </div>
+  {{if not .Cards}}
+    <div class="box p-8 text-center text-sm">
+      No cards{{if or .Query .Category .Media}}
+      match your filter{{end}}.
+    <a class="underline font-semibold" href="/cards/new">Add one </a>.
+  </div>
+{{else}}
+  <ul class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    {{range .Cards}}
+      <li id="card-{{.ID}}" class="box overflow-hidden flex flex-col relative">
+        <button
+          class="absolute top-2.5 right-2.5 z-10 size-5 rounded-full
+                 border-2 border-ink bg-white text-[10px] grid place-items-center"
+          aria-label="Select for deletion"
+          data-class:bg-sun="$deleteIds.includes({{.ID}})"
+          data-on:click="$deleteIds.push({{.ID}})"
+          type="button"
+        >✓</button>
+        <div
+          class="flex items-center justify-between px-3.5 py-2
+                 border-b-2 border-ink text-[11px] font-semibold"
+          style="background: {{mediaColor .}}"
+        >
+          <span>{{mediaType .}}</span>
+          <span>{{statusLabel .Status}}</span>
+        </div>
+        <div class="p-3.5 flex flex-col gap-1.5 flex-1">
+          <b class="text-base">{{.Front}}</b>
+          <span class="text-xs whitespace-pre-line">{{.Back}}</span>
+          {{if .Category}}
+            <span class="tag mt-1">{{.Category}}</span>
+          {{end}}
+        </div>
+        <div class="flex gap-2 p-3 pt-0 mt-auto">
+          <a class="btn min-h-9" href="/cards/{{.ID}}/edit">Edit</a>
+        </div>
+      </li>
+    {{end}}
+  </ul>
+{{end}}
+{{end}}

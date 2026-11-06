@@ -1,0 +1,132 @@
+{{define "NewCard"}}
+  {{template "cardPage" (cardPageData "New card" .)}}
+{{end}}
+
+{{define "EditCard"}}
+  {{template "cardPage" (cardPageData "Edit card" .)}}
+{{end}}
+
+{{define "cardPage"}}
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>{{template "head"}}</head>
+    <body class="bg-cream text-ink font-sans min-h-screen pb-24 md:pb-0">
+      {{template "header" "cards"}}
+      <main class="p-4 pt-0 md:px-8 max-w-2xl">
+        <h1 class="text-xl font-bold mb-4">{{.Title}}</h1>
+        {{template "cardForm" .Data}}
+      </main>
+    </body>
+  </html>
+{{end}}
+
+{{define "cardForm"}}
+  <form action="/cards/save" method="post">
+    <input name="id" type="hidden" value="{{if .Card}}{{.Card.ID}}{{end}}">
+    {{with .Error}}
+      <p class="box p-3 text-sm mb-4">{{.}}</p>
+    {{end}}
+    <div class="flex flex-col gap-4">
+      <label class="flex flex-col gap-1 text-sm font-semibold">
+        Front
+        <textarea
+          class="box px-3 py-2 bg-white outline-none font-normal"
+          data-bind="front"
+          name="front"
+          placeholder="Question"
+          required
+          rows="3"
+        >{{.Front}}</textarea>
+      </label>
+      <label class="flex flex-col gap-1 text-sm font-semibold">
+        Back
+        <textarea
+          class="box px-3 py-2 bg-white outline-none font-normal"
+          data-bind="back"
+          name="back"
+          placeholder="Answer"
+          required
+          rows="3"
+        >{{.Back}}</textarea>
+      </label>
+      <label class="flex flex-col gap-1 text-sm font-semibold">
+        Category
+        <input
+          class="box px-3 h-11 bg-white outline-none font-normal"
+          list="category-list"
+          name="category"
+          placeholder="e.g. web (optional)"
+          value="{{.Category}}"
+        >
+        <datalist id="category-list">
+          {{range .Categories}}
+            <option value="{{.}}"></option>
+          {{end}}
+        </datalist>
+      </label>
+      <fieldset class="flex flex-col gap-1 text-sm font-semibold">
+        <legend>Front media (optional)</legend>
+        <label class="font-normal">
+          Image
+          <input
+            class="box px-3 h-11 bg-white font-normal w-full file:mr-2
+                   file:border-0 file:bg-sun file:rounded-full file:px-3
+                   file:font-semibold"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            data-on:change="$imgUrl = $el.files.length
+              ? URL.createObjectURL($el.files[0])
+              : '';"
+            name="front_image"
+            type="file"
+          >
+        </label>
+        <label class="font-normal">
+          Audio
+          <input
+            class="box px-3 h-11 bg-white font-normal w-full file:mr-2
+                   file:border-0 file:bg-sun file:rounded-full file:px-3
+                   file:font-semibold"
+            accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
+            data-on:change="$audUrl = $el.files.length
+              ? URL.createObjectURL($el.files[0])
+              : '';"
+            name="front_audio"
+            type="file"
+          >
+        </label>
+      </fieldset>
+      <div class="flex gap-2">
+        <button class="btn-sun" type="submit">Save</button>
+        <a class="btn inline-grid place-items-center" href="/cards">Cancel</a>
+      </div>
+    </div>
+  </form>
+
+  <div
+    data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
+      'imgUrl': {{existingMediaURL .Card "image"}},
+      'audUrl': {{existingMediaURL .Card "audio"}}}"
+  >
+    <h2 class="text-sm font-bold mt-6 mb-2">Preview</h2>
+    <div
+      class="box bg-pink p-6 flex flex-col items-center justify-center gap-2
+             min-h-40"
+    >
+      <span class="tag">Front</span>
+      <p
+        class="font-semibold text-lg text-center whitespace-pre-line"
+        data-text="$front"
+      ></p>
+    </div>
+    <div
+      class="box bg-mint p-6 flex flex-col items-center justify-center gap-2
+             min-h-40 mt-3"
+    >
+      <span class="tag">Back</span>
+      <p
+        class="font-semibold text-lg text-center whitespace-pre-line"
+        data-text="$back"
+      ></p>
+    </div>
+  </div>
+{{end}}
