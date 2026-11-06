@@ -118,8 +118,7 @@ func (s *Store) CardsByIDs(ids []int64) ([]StudyCard, error) {
 		return nil, nil
 	}
 	ph := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-	args := make([]any, 0, len(ids)+1)
-	args = append(args, masteredDays)
+	args := make([]any, 0, len(ids))
 	for _, id := range ids {
 		args = append(args, id)
 	}

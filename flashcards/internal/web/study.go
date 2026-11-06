@@ -25,6 +25,14 @@ type studySignals struct {
 	// DroppedIDs are cards forgotten twice in one pass; they are
 	// excluded from the current pass (still due next session).
 	DroppedIDs []int64 `json:"droppedIds"`
+	// GradedIDs are every card graded during this pass (a forced
+	// "review anyway" pass would otherwise keep re-serving them, since
+	// it queues due and not-due cards alike).
+	GradedIDs []int64 `json:"gradedIds"`
+	// Reviewed is the number of grades already given this pass. The
+	// client keeps it in its signals, so the server can re-derive the
+	// pass total (remaining queue + already reviewed) on every response.
+	Reviewed int `json:"reviewed"`
 	// Idx is the position within the queue (0-based) for Prev/Next.
 	Idx int `json:"idx"`
 	// ShuffleSeed randomises the queue order; stable while it doesn't
@@ -64,8 +72,6 @@ type studyData struct {
 	Force        bool
 	// Idx/Count locate the current card in the queue.
 	Idx, Count int
-	// Position is "Card N of M" within the current queue (1-based).
-	Position string
 }
 
 func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
@@ -87,11 +93,7 @@ func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// The pass definition changed (filter/shuffle/force): refresh
-		// the pass total. reviewed is reset client-side by the
-		// triggering action.
-		if err := sse.PatchSignals([]byte(
-			`{"passTotal": ` + strconv.Itoa(d.Count) + `}`)); err != nil {
+		if err := sse.PatchSignals(passTotal(d, sig)); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -106,7 +108,7 @@ func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
 // studyData builds the study view model from the request signals.
 func (s *Server) studyData(sig studySignals) (*studyData, error) {
 	q, err := s.queue(sig.HideMastered, sig.Category, sig.Force,
-		sig.RequeuedIDs, sig.DroppedIDs)
+		sig.GradedIDs, sig.RequeuedIDs, sig.DroppedIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -150,11 +152,19 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 		d.Card = &q[idx]
 		d.CardFlip = studyCardFlip(&q[idx])
 	}
-	if d.Count > 0 {
-		d.Position = "Card " + strconv.Itoa(idx+1) + " of " +
-			strconv.Itoa(d.Count)
-	}
 	return d, nil
+}
+
+// passTotal patches the "of M" total as remaining + already reviewed.
+// It is a per-pass invariant: constant under paging (the queue cannot
+// change between pages) and under grades (a graded card leaves the
+// queue exactly as reviewed grows), and it re-derives whenever the
+// pass is redefined with a fresh queue and reviewed=0 — including the
+// caught-up→review-anyway or reset-progress flows, where a stale
+// passTotal would otherwise render "Card N of 0" always.
+func passTotal(d *studyData, sig studySignals) []byte {
+	return []byte(`{"passTotal": ` +
+		strconv.Itoa(d.Count+sig.Reviewed) + `}`)
 }
 
 // shuffle orders the queue deterministically from a seed, so paging
@@ -172,54 +182,61 @@ func shuffle(q []store.StudyCard, seed int64) {
 	})
 }
 
-// queue fetches the due queue, filtered by category when given, with
-// requeued (forgotten) cards appended at the end in requeue order.
+// queue builds the pass queue: the due (or, when forced, all) cards
+// the store reports, minus cards already graded or dropped this pass;
+// requeued (forgotten) cards are moved out of the head and appended
+// once at the end, in the order they were forgotten.
 func (s *Server) queue(hideMastered bool, category string, force bool,
-	requeued, dropped []int64) ([]store.StudyCard, error) {
+	graded, requeued, dropped []int64) ([]store.StudyCard, error) {
 	q, err := s.store.Queue(hideMastered, force)
 	if err != nil {
 		return nil, err
 	}
-	excl := make(map[int64]bool, len(requeued)+len(dropped))
+	excl := make(map[int64]bool, len(graded)+len(dropped))
+	for _, id := range graded {
+		excl[id] = true
+	}
 	for _, id := range dropped {
 		excl[id] = true
 	}
-	if len(excl) > 0 {
-		filtered := q[:0]
-		for _, c := range q {
-			if !excl[c.ID] {
-				filtered = append(filtered, c)
-			}
-		}
-		q = filtered
+	droppedSet := make(map[int64]bool, len(dropped))
+	for _, id := range dropped {
+		droppedSet[id] = true
 	}
-	if len(requeued) > 0 {
-		filtered := q[:0]
-		for _, c := range q {
-			if !excl[c.ID] {
-				filtered = append(filtered, c)
-			}
+	requeuedSet := make(map[int64]bool, len(requeued))
+	for _, id := range requeued {
+		requeuedSet[id] = true
+	}
+	// Head: scheduled cards minus graded/dropped, plus requeued cards
+	// hoisted out (they re-attach below, so they appear exactly once).
+	head := q[:0]
+	for _, c := range q {
+		if !excl[c.ID] && !requeuedSet[c.ID] {
+			head = append(head, c)
 		}
-		q = filtered
+	}
+	q = head
+	if len(requeued) > 0 {
 		// Fetch and append the requeued cards, in requeue order, still
-		// honouring the filters.
-		byID := make(map[int64]store.StudyCard, len(requeued))
-		if len(requeued) > 0 {
-			all, err := s.store.CardsByIDs(requeued)
-			if err != nil {
-				return nil, err
-			}
-			for _, c := range all {
-				if !hideMastered || !srs.Mastered(c.State) {
-					byID[c.ID] = c
-				}
+		// honouring the filters. A dropped (double-forgotten) card no
+		// longer belongs to the pass and is skipped.
+		all, err := s.store.CardsByIDs(requeued)
+		if err != nil {
+			return nil, err
+		}
+		byID := make(map[int64]store.StudyCard, len(all))
+		for _, c := range all {
+			if !hideMastered || !srs.Mastered(c.State) {
+				byID[c.ID] = c
 			}
 		}
 		for _, id := range requeued {
-			if c, ok := byID[id]; ok {
-				if category == "" || c.Category == category {
-					q = append(q, c)
-				}
+			c, ok := byID[id]
+			if !ok || droppedSet[id] {
+				continue
+			}
+			if category == "" || c.Category == category {
+				q = append(q, c)
 			}
 		}
 	}
@@ -289,6 +306,10 @@ func (s *Server) gradeCard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := sse.PatchSignals(passTotal(d, sig)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := sse.PatchSignals(busyResetSignals()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -318,6 +339,10 @@ func (s *Server) resetProgress(w http.ResponseWriter, r *http.Request) {
 	sse := datastar.NewSSE(w, r)
 	if err := sse.PatchSignals([]byte(
 		`{"revealed": false, "idx": 0, "confirm": false, "force": false}`)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := sse.PatchSignals(passTotal(d, sig)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

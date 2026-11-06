@@ -18,7 +18,7 @@
               <select
                 class="btn h-11 appearance-none pl-4 pr-9 bg-white"
                 data-bind="category"
-                data-on:change="$revealed = false; @get('/')"
+                data-on:change="$revealed = false; $reviewed = 0; @get('/')"
               >
                 <option value="">All Categories</option>
                 {{$sel := .Category}}
@@ -38,7 +38,7 @@
                 {{if .HideMastered}}checked{{end}}
                 class="cursor-pointer"
                 data-bind="hideMastered"
-                data-on:change="$revealed = false; @get('/')"
+                data-on:change="$revealed = false; $reviewed = 0; @get('/')"
                 type="checkbox"
               >
               Hide mastered
@@ -83,7 +83,12 @@
                   $droppedIds.push({{$.Card.ID}});
                 } else {
                   $requeuedIds.push({{$.Card.ID}});
+                };{{else}}
+                if ($requeuedIds.includes({{$.Card.ID}})) {
+                  $requeuedIds = $requeuedIds.filter(
+                    i => i !== {{$.Card.ID}});
                 };{{end}}
+                $gradedIds.push({{$.Card.ID}});
                 $reviewed = $reviewed + 1;
                 $grade = '{{$g.Value}}';
                 @post('/study/{{$.Card.ID}}/grade')"
@@ -188,7 +193,8 @@
             {{else if not .Force}}
               <button
                 class="btn-sun"
-                data-on:click="$force = true; $idx = 0; @get('/')"
+                data-on:click="$force = true; $idx = 0; $reviewed = 0;
+                $gradedIds = []; $requeuedIds = []; $droppedIds = []; @get('/')"
                 type="button"
               >Review anyway</button>
             {{end}}
@@ -220,7 +226,8 @@
     class="btn"
     data-attr:disabled="$anyBusy"
     data-indicator:busy-reset
-    data-on:click="@post('/study/reset')"
+    data-on:click="$reviewed = 0; $gradedIds = []; $requeuedIds = [];
+      $droppedIds = []; @post('/study/reset')"
     data-show="$confirm"
     style="display: none;
            background: var(--color-rose)"

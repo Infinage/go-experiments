@@ -101,6 +101,15 @@ func TestCardsByIDs(t *testing.T) {
 	if len(cs) != 2 {
 		t.Fatalf("got %d cards", len(cs))
 	}
+	// A single-id request must return that card; an arg/placeholder
+	// mismatch here consumed ids and once returned nothing.
+	single, err := s.CardsByIDs([]int64{a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(single) != 1 || single[0].ID != a {
+		t.Fatalf("singleton request lost the card: %+v", single)
+	}
 	byID := map[int64]StudyCard{cs[0].ID: cs[0], cs[1].ID: cs[1]}
 	if byID[a].State.Interval != 1 {
 		t.Fatalf("state not loaded: %+v", byID[a])
