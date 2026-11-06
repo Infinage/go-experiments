@@ -22,11 +22,17 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	funcs := template.FuncMap{
 		// sub is integer subtraction for template arithmetic.
 		"sub": func(a, b int) int { return a - b },
-		// gradeChoices lists the study grade buttons.
+		// cardStatusData wraps the status-line fields for the fragment.
+		"cardStatusData": func(line string, id int64) cardStatusData {
+			return cardStatusData{Line: line, ID: id}
+		},
+		// gradeChoices lists the study grade buttons with their hints.
 		"gradeChoices": func() []gradeChoice {
 			return []gradeChoice{
-				{"again", "Again"}, {"hard", "Hard"},
-				{"good", "Good"}, {"easy", "Easy"},
+				{"forgot", "Forgot", "Didn't recall — returns in 10 minutes"},
+				{"hard", "Hard", "Recalled with effort — due tomorrow"},
+				{"medium", "Medium", "Recalled — due in a few days"},
+				{"easy", "Easy", "Recalled easily — mastered sooner"},
 			}
 		},
 		// percent guards against division by zero in progress bars.
@@ -121,6 +127,7 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	mux.HandleFunc("GET /cards/{id}/edit", s.editCard)
 	mux.HandleFunc("GET /cards/{id}/media/{kind}", s.cardMedia)
 	mux.HandleFunc("POST /cards/{id}/media/delete", s.deleteMedia)
+	mux.HandleFunc("POST /cards/{id}/status/reset", s.resetCardStatus)
 	mux.HandleFunc("DELETE /cards", s.deleteCards)
 	return mux, nil
 }

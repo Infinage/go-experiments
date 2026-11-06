@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -13,12 +14,25 @@ import (
 
 	"github.com/starfederation/datastar-go/datastar"
 
+	"github.com/infinage/go-experiments/flashcards/internal/srs"
 	"github.com/infinage/go-experiments/flashcards/internal/store"
 )
 
 // readSignals wraps datastar.ReadSignals for short local use.
 func readSignals(r *http.Request, target any) error {
 	return datastar.ReadSignals(r, target)
+}
+
+// cardStatusData backs the edit page's status line fragment.
+type cardStatusData struct {
+	Line string
+	ID   int64
+}
+
+// statusLineJSON JSON-quotes a status line for a signals patch.
+func statusLineJSON(line string) string {
+	b, _ := json.Marshal(line)
+	return string(b)
 }
 
 func mediaPath(id int64, kind string) string {
@@ -63,6 +77,30 @@ func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := datastar.NewSSE(w, r).
 		PatchSignals([]byte(payload)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// resetCardStatus clears one card's review state over SSE and re-renders
+// its status line.
+func (s *Server) resetCardStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.ResetCardProgress(id); err != nil &&
+		!errors.Is(err, store.ErrNotFound) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	line := dueLine(srs.State{}, false)
+	frag := s.templateHTML("card-status", cardStatusData{Line: line, ID: id})
+	sse := datastar.NewSSE(w, r)
+	if err := sse.PatchSignals([]byte(`{"busyResetStatus": false}`)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := sse.PatchElements(frag); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

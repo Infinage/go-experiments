@@ -7,9 +7,9 @@ import "time"
 type Grade int
 
 const (
-	Again Grade = iota
+	Forgot Grade = iota // 0: did not recall
 	Hard
-	Good
+	Medium
 	Easy
 )
 
@@ -41,7 +41,7 @@ func Mastered(s State) bool { return s.Interval >= MasteredDays }
 func Review(s State, g Grade, now time.Time) State {
 	next := s
 	switch g {
-	case Again:
+	case Forgot:
 		next.Repetitions = 0
 		next.Lapses++
 		next.Interval = 0
@@ -57,7 +57,7 @@ func Review(s State, g Grade, now time.Time) State {
 		}
 		next.Repetitions++
 		next.DueAt = now.AddDate(0, 0, next.Interval)
-	case Good:
+	case Medium:
 		next.Interval = nextInterval(s, 1.0)
 		next.Repetitions++
 		next.DueAt = now.AddDate(0, 0, next.Interval)

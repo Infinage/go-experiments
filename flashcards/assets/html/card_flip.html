@@ -33,14 +33,14 @@
         {{end}}
         {{if .LiveMedia}}
           <img
-            class="max-h-28 md:max-h-40 rounded-xl border-2 border-ink"
+            class="shrink-0 max-h-[38%] rounded-xl border-2 border-ink"
             alt="Card front image"
             data-attr:src="$imgUrl"
             data-show="$imgUrl"
             style="display: none"
           >
           <audio
-            class="w-full max-w-xs"
+            class="shrink-0 w-full max-w-xs"
             controls
             data-attr:src="$audUrl"
             data-on:click__stop=";"
@@ -50,22 +50,35 @@
         {{else}}
           {{if .ImageURL}}
             <img
-              class="max-h-36 md:max-h-48 rounded-xl border-2 border-ink"
+              class="shrink-0 max-h-[38%] rounded-xl border-2 border-ink"
               alt="Card front image"
               src="{{.ImageURL}}"
             >
           {{end}}
           {{if .AudioURL}}
-            <audio class="w-full max-w-sm" controls src="{{.AudioURL}}"></audio>
+            <audio
+              class="shrink-0 w-full max-w-sm"
+              controls
+              data-on:click__stop=";"
+              src="{{.AudioURL}}"
+            ></audio>
           {{end}}
         {{end}}
-        <h1
-          class="m-0 font-semibold leading-tight whitespace-pre-line
-                 max-w-[560px]
-                 {{if eq .Size "h-64"}}text-lg{{else}}text-[26px] md:text-[34px]{{end}}"
-          {{if .Live}}data-text="$front"
-          {{end}}
-        >{{.Front}}</h1>
+        <div
+          class="flex-1 min-h-0 w-full flex items-center justify-center
+                 overflow-hidden"
+        >
+          <h1
+            class="m-0 font-semibold leading-tight whitespace-pre-line w-full"
+            data-fit
+            data-fit-min="14"
+            {{if eq .Size "h-64"}}data-fit-max="24"
+            {{else}}data-fit-max="52"
+            {{end}}
+            {{if .Live}}data-text="$front"
+            {{end}}
+          >{{.Front}}</h1>
+        </div>
         {{if .TapHint}}
           <span
             class="text-[13px]"
@@ -78,12 +91,20 @@
                absolute inset-0 overflow-hidden flex items-center justify-center
                px-4 md:px-6 py-6 text-center"
       >
-        <p
-          class="m-0 whitespace-pre-line max-w-[560px]
-                 {{if eq .Size "h-64"}}text-sm{{else}}text-lg md:text-xl{{end}}"
-          {{if .Live}}data-text="$back"
-          {{end}}
-        >{{.Back}}</p>
+        <div
+          class="w-full h-full flex items-center justify-center overflow-hidden"
+        >
+          <p
+            class="m-0 whitespace-pre-line w-full"
+            data-fit
+            data-fit-min="12"
+            {{if eq .Size "h-64"}}data-fit-max="18"
+            {{else}}data-fit-max="36"
+            {{end}}
+            {{if .Live}}data-text="$back"
+            {{end}}
+          >{{.Back}}</p>
+        </div>
       </div>
     </div>
   </div>

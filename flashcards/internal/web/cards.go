@@ -2,12 +2,15 @@ package web
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/starfederation/datastar-go/datastar"
 
+	"github.com/infinage/go-experiments/flashcards/internal/srs"
 	"github.com/infinage/go-experiments/flashcards/internal/store"
 )
 
@@ -83,8 +86,38 @@ type cardFormData struct {
 	Preview    cardFlipView
 	// MediaKind is the selected front-media type: "", "image" or "audio".
 	MediaKind string
+	// StatusLine describes the card's review state ("due tomorrow" etc.),
+	// empty for new cards.
+	StatusLine string
 	// Form values echoed back after a failed validation.
 	Front, Back, Category string
+}
+
+// dueLine renders the review status of a card for the edit page.
+func dueLine(st srs.State, exists bool) string {
+	if !exists {
+		return "Not started — due now"
+	}
+	if srs.Mastered(st) && st.DueAt.After(time.Now()) {
+		days := int(time.Until(st.DueAt).Hours() / 24)
+		return fmt.Sprintf("Mastered — next review in %d day%s",
+			days, plural(days))
+	}
+	if !st.DueAt.After(time.Now()) {
+		return "Due now"
+	}
+	days := int(time.Until(st.DueAt).Hours()/24) + 1
+	if days == 1 {
+		return "Due tomorrow"
+	}
+	return fmt.Sprintf("Due in %d day%s", days, plural(days))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // mediaKindOf derives the toggle state from a card's stored media.
@@ -133,10 +166,16 @@ func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	line := ""
+	if st, exists, err := s.store.ReviewState(c.ID); err == nil && exists {
+		line = dueLine(st, true)
+	} else if err == nil {
+		line = dueLine(st, false)
+	}
 	s.render(w, "EditCard", cardFormData{Card: c, Categories: names,
 		Front: c.Front, Back: c.Back, Category: c.Category,
-		MediaKind: mediaKindOf(c),
-		Preview:   previewCardFlip(c.Front, c.Back, c)})
+		MediaKind: mediaKindOf(c), StatusLine: line,
+		Preview: previewCardFlip(c.Front, c.Back, c)})
 }
 
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {

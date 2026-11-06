@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/binary"
-	"fmt"
 	"hash/fnv"
 	"net/http"
 	"sort"
@@ -29,21 +28,21 @@ type studySignals struct {
 	Force bool `json:"force"`
 }
 
-// gradeChoice is one study grade button.
+// gradeChoice is one study grade button with its meaning hint.
 type gradeChoice struct {
-	Value, Label string
+	Value, Label, Hint string
 }
 
 // deckSeg is one category's slice of the Decks stacked bar.
 type deckSeg struct {
-	Name  string
-	Width int // percent of the bar
-	// Color is a CSS color: pink (nothing mastered), sky (partial) or
-	// mint (fully mastered).
-	Color string
-	// Title is the hover tooltip text.
-	Title           string
-	Mastered, Total int
+	Name          string
+	Total         int
+	Mastered      int
+	Learning      int
+	NotStarted    int
+	MasteredPct   int
+	LearningPct   int
+	NotStartedPct int
 }
 
 // studyData backs the whole study page and its card fragment.
@@ -122,26 +121,12 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 	if err != nil {
 		return nil, err
 	}
-	total := 0
-	for _, d := range decks {
-		total += d.Total
-	}
 	bar := make([]deckSeg, len(decks))
 	for i, d := range decks {
-		width := 0
-		if total > 0 {
-			width = d.Total * 100 / total
-		}
-		color := "#FF8AE2" // nothing mastered
-		switch {
-		case d.Mastered >= d.Total:
-			color = "#4FDDC7" // fully mastered
-		case d.Mastered > 0:
-			color = "#94A9F0" // partially mastered
-		}
-		bar[i] = deckSeg{Name: d.Name, Width: width, Color: color,
-			Mastered: d.Mastered, Total: d.Total,
-			Title: fmt.Sprintf("%s — %d/%d mastered", d.Name, d.Mastered, d.Total)}
+		bar[i] = deckSeg{Name: d.Name, Total: d.Total,
+			Mastered: d.Mastered, Learning: d.Learning,
+			NotStarted: d.NotStarted, MasteredPct: d.MasteredPct,
+			LearningPct: d.LearningPct, NotStartedPct: d.NotStartedPct}
 	}
 	d := &studyData{Stats: stats, HideMastered: sig.HideMastered, DeckBar: bar,
 		Category: categoryIn(cats, sig.Category), Categories: cats,
@@ -340,6 +325,22 @@ func (s *Server) seedCards(w http.ResponseWriter, r *http.Request) {
 		{"Chemical symbol for gold?", "Au", "science"},
 		{"Powerhouse of the cell?", "Mitochondria", "science"},
 		{"A very long card front to test text wrapping and overflow handling in the retro card layout across desktop and mobile viewports, with several clauses and no manual line breaks anywhere in the string", "A very long card back that also needs to wrap correctly inside the mint answer face, keeping the border and padding intact while remaining fully readable on narrow phone screens as well as wide desktop panes.", "web"},
+		{"Who painted the Mona Lisa?", "Leonardo da Vinci", "art"},
+		{"Which movement was Salvador Dalí part of?", "Surrealism", "art"},
+		{"Primary colors of the RYB model?", "Red, yellow, blue", "art"},
+		{"Who wrote 'One Hundred Years of Solitude'?", "Gabriel García Márquez", "books"},
+		{"Author of the 'Discworld' series?", "Terry Pratchett", "books"},
+		{"In which year did the Berlin Wall fall?", "1989", "history"},
+		{"Who was the first emperor of Rome?", "Augustus", "history"},
+		{"The Industrial Revolution began in which country?", "Great Britain", "history"},
+		{"Main ingredient of guacamole?", "Avocado", "cooking"},
+		{"What is 'umami'?", "The savoury basic taste", "cooking"},
+		{"Which film won the first Academy Award for Best Picture?", "Wings (1929)", "movies"},
+		{"Who directed 'Inception'?", "Christopher Nolan", "movies"},
+		{"How often are the Summer Olympics held?", "Every four years", "sports"},
+		{"In which sport would you perform a slam dunk?", "Basketball", "sports"},
+		{"What does DNA stand for?", "Deoxyribonucleic acid", "science"},
+		{"Speed of a sneeze can exceed…", "160 km/h", "science"},
 	}
 	for _, c := range seeds {
 		if _, err := s.store.CreateCard(c[0], c[1], c[2]); err != nil {

@@ -15,15 +15,15 @@ func TestNewCardDueImmediately(t *testing.T) {
 }
 
 func TestFirstReviewsUseLearningSteps(t *testing.T) {
-	s := Review(New(), Good, now)
+	s := Review(New(), Medium, now)
 	if s.Interval != 1 || s.Repetitions != 1 {
 		t.Fatalf("first good: %+v", s)
 	}
-	s = Review(s, Good, now)
+	s = Review(s, Medium, now)
 	if s.Interval != 6 {
 		t.Fatalf("second good: %+v", s)
 	}
-	s = Review(s, Good, now)
+	s = Review(s, Medium, now)
 	if s.Interval != 15 { // 6 * 2.5
 		t.Fatalf("third good: %+v", s)
 	}
@@ -33,8 +33,8 @@ func TestFirstReviewsUseLearningSteps(t *testing.T) {
 }
 
 func TestAgainResetsAndLapses(t *testing.T) {
-	s := Review(Review(Review(New(), Good, now), Good, now), Good, now)
-	s = Review(s, Again, now)
+	s := Review(Review(Review(New(), Medium, now), Medium, now), Medium, now)
+	s = Review(s, Forgot, now)
 	if s.Repetitions != 0 || s.Lapses != 1 || s.Interval != 0 {
 		t.Fatalf("again: %+v", s)
 	}
@@ -49,7 +49,7 @@ func TestAgainResetsAndLapses(t *testing.T) {
 
 func TestEaseFloorsAt1_3(t *testing.T) {
 	s := State{Ease: 1.35, Interval: 10, Repetitions: 3}
-	s = Review(s, Again, now)
+	s = Review(s, Forgot, now)
 	if s.Ease != 1.3 {
 		t.Fatalf("ease floor: %v", s.Ease)
 	}
@@ -88,8 +88,8 @@ func TestMastered(t *testing.T) {
 
 func TestReviewIsDeterministic(t *testing.T) {
 	s := New()
-	a := Review(Review(s, Good, now), Hard, now)
-	b := Review(Review(s, Good, now), Hard, now)
+	a := Review(Review(s, Medium, now), Hard, now)
+	b := Review(Review(s, Medium, now), Hard, now)
 	if a != b {
 		t.Fatalf("non-deterministic: %+v vs %+v", a, b)
 	}

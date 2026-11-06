@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -111,22 +112,29 @@ func (s *Store) Queue(hideMastered, includeAll bool) ([]StudyCard, error) {
 	return out, rows.Err()
 }
 
-// CategoryProgress is a deck's mastered/total counts, for the sidebar.
+// CategoryProgress is a deck's per-status counts, for the sidebar bars.
 type CategoryProgress struct {
-	Name     string
-	Total    int
-	Mastered int
+	Name       string
+	Total      int
+	Mastered   int
+	Learning   int
+	NotStarted int
+	// Percentages of Total for the segmented bars.
+	MasteredPct, LearningPct, NotStartedPct int
 }
 
 // CategoryProgresses returns per-category progress, alphabetically.
 // Uncategorised cards are excluded.
 func (s *Store) CategoryProgresses() ([]CategoryProgress, error) {
 	rows, err := s.db.Query(`SELECT IFNULL(c.category,''), COUNT(*),
-			SUM(CASE WHEN IFNULL(rs.interval_days, 0) >= ? THEN 1 ELSE 0 END)
+			SUM(CASE WHEN IFNULL(rs.interval_days, 0) >= ? THEN 1 ELSE 0 END),
+			SUM(CASE WHEN rs.card_id IS NOT NULL
+				AND IFNULL(rs.interval_days, 0) < ? THEN 1 ELSE 0 END),
+			SUM(CASE WHEN rs.card_id IS NULL THEN 1 ELSE 0 END)
 		FROM cards c
 		LEFT JOIN review_state rs ON rs.card_id = c.id
 		WHERE IFNULL(c.category,'') <> ''
-		GROUP BY c.category ORDER BY c.category`, masteredDays)
+		GROUP BY c.category ORDER BY c.category`, masteredDays, masteredDays)
 	if err != nil {
 		return nil, err
 	}
@@ -134,12 +142,52 @@ func (s *Store) CategoryProgresses() ([]CategoryProgress, error) {
 	var out []CategoryProgress
 	for rows.Next() {
 		var cp CategoryProgress
-		if err := rows.Scan(&cp.Name, &cp.Total, &cp.Mastered); err != nil {
+		if err := rows.Scan(&cp.Name, &cp.Total, &cp.Mastered,
+			&cp.Learning, &cp.NotStarted); err != nil {
 			return nil, err
 		}
+		pct := func(n int) int {
+			if cp.Total == 0 {
+				return 0
+			}
+			return n * 100 / cp.Total
+		}
+		cp.MasteredPct = pct(cp.Mastered)
+		cp.LearningPct = pct(cp.Learning)
+		cp.NotStartedPct = pct(cp.NotStarted)
 		out = append(out, cp)
 	}
 	return out, rows.Err()
+}
+
+// ReviewState returns a card's scheduling state and whether one exists.
+func (s *Store) ReviewState(cardID int64) (srs.State, bool, error) {
+	var st srs.State
+	var due string
+	err := s.db.QueryRow(`SELECT due_at, interval_days, ease,
+			repetitions, lapses FROM review_state WHERE card_id = ?`,
+		cardID).Scan(&due, &st.Interval, &st.Ease, &st.Repetitions,
+		&st.Lapses)
+	if errors.Is(err, sql.ErrNoRows) {
+		return st, false, nil
+	}
+	if err != nil {
+		return st, false, err
+	}
+	st.DueAt = parseTime(due)
+	return st, true, nil
+}
+
+// ResetCardProgress clears the scheduling state of a single card.
+func (s *Store) ResetCardProgress(cardID int64) error {
+	res, err := s.db.Exec(`DELETE FROM review_state WHERE card_id = ?`, cardID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ResetProgress clears scheduling state for a category ("": all cards),

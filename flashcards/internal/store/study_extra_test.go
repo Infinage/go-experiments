@@ -10,7 +10,7 @@ import (
 func TestQueueIncludeAllIgnoresDue(t *testing.T) {
 	s := mustStore(t)
 	id, _ := s.CreateCard("q", "a", "")
-	if _, err := s.Review(id, srs.Good, time.Now()); err != nil {
+	if _, err := s.Review(id, srs.Medium, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	// Not due -> empty queue normally.
@@ -53,10 +53,10 @@ func TestResetProgress(t *testing.T) {
 	s := mustStore(t)
 	id, _ := s.CreateCard("q", "a", "web")
 	other, _ := s.CreateCard("w", "b", "langs")
-	if _, err := s.Review(id, srs.Good, time.Now()); err != nil {
+	if _, err := s.Review(id, srs.Medium, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Review(other, srs.Good, time.Now()); err != nil {
+	if _, err := s.Review(other, srs.Medium, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	// Category-scoped reset: the web card is new again, the langs card

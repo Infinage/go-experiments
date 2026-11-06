@@ -29,7 +29,7 @@ func TestReviewSchedules(t *testing.T) {
 	id, _ := s.CreateCard("q", "a", "")
 
 	// New cards are due; after a Good review they are not.
-	next, err := s.Review(id, srs.Good, time.Now())
+	next, err := s.Review(id, srs.Medium, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestMasteredCountAndHideMastered(t *testing.T) {
 	state := srs.New()
 	now := time.Now()
 	for range 5 {
-		state = srs.Review(state, srs.Good, now)
+		state = srs.Review(state, srs.Medium, now)
 		if state.Interval < 21 {
 			now = state.DueAt
 		}
@@ -104,11 +104,11 @@ func TestReviewNewCardStartsFreshState(t *testing.T) {
 	id, _ := s.CreateCard("q", "a", "")
 	// Reviewing twice without the card ever being due: second review
 	// builds on the first state.
-	next, err := s.Review(id, srs.Good, time.Now())
+	next, err := s.Review(id, srs.Medium, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	next2, err := s.Review(id, srs.Good, time.Now())
+	next2, err := s.Review(id, srs.Medium, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

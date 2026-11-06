@@ -5,7 +5,7 @@ A retro-styled, single-user flashcard app with SM-2 spaced repetition.
 - Responsive design (mobile bottom tabs, desktop sidebar), no login
 - Cards support text, an image and audio on the **front** (back is text
   only); media is stored as BLOBs in SQLite
-- Study mode (default) with flip, grade (Again/Hard/Good/Easy), shuffle,
+- Study mode (default) with flip, grade (Forgot/Hard/Medium/Easy), shuffle,
   paging, category filter and "hide mastered"
 - All cards view with search, media/category filters, bulk delete
 - Per-category "decks" progress; reset progress per category or all

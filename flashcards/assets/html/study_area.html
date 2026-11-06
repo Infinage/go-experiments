@@ -2,8 +2,8 @@
   <div
     id="study-area"
     class="contents"
-    data-computed:any-busy="!!($busyShuffle || $busyAgain || $busyHard ||
-    $busyGood || $busyEasy || $busyPrev || $busyNext || $busyReset ||
+    data-computed:any-busy="!!($busyShuffle || $busyForgot || $busyHard ||
+    $busyMedium || $busyEasy || $busyPrev || $busyNext || $busyReset ||
     $busyDelImg || $busyDelAud)"
   >
     {{if .Card}}
@@ -65,26 +65,32 @@
 
         {{/* Grade buttons, shown after the reveal. */}}
         <div
-          class="flex flex-wrap gap-2 justify-center mt-3.5"
+          class="grid grid-cols-2 gap-2 justify-center mt-3.5 md:grid-cols-4
+                 max-w-2xl mx-auto w-full"
           data-show="$revealed"
           style="display: none"
         >
           {{range $g := gradeChoices}}
-            <button
-              class="btn bg-white hover:bg-sun"
-              data-attr:disabled="$anyBusy"
-              data-indicator:busy-{{$g.Value}}
-              data-on:click="$grade = '{{$g.Value}}';
+            <div class="flex flex-col items-center gap-1">
+              <button
+                class="btn bg-white hover:bg-sun"
+                data-attr:disabled="$anyBusy"
+                data-indicator:busy-{{$g.Value}}
+                data-on:click="$grade = '{{$g.Value}}';
             @post('/study/{{$.Card.ID}}/grade')"
-              type="button"
-            >
+                type="button"
+              >
+                <span
+                  class="spinner"
+                  data-show="$busy{{$g.Label}}"
+                  style="display: none"
+                ></span>
+                {{$g.Label}}
+              </button>
               <span
-                class="spinner"
-                data-show="$busy{{$g.Label}}"
-                style="display: none"
-              ></span>
-              {{$g.Label}}
-            </button>
+                class="text-[10px] leading-tight text-center text-ink/70"
+              >{{$g.Hint}}</span>
+            </div>
           {{end}}
         </div>
 
@@ -254,28 +260,36 @@
 {{define "decksBox"}}
   <div class="box p-4 flex flex-col gap-3">
     <b class="text-[15px]">Decks</b>
-    {{/* Stacked bar: one segment per category, colored by its progress;
-               hover shows the deck name and progress. */}}
-    <div class="flex h-4 rounded-full border-2 border-ink overflow-hidden">
+    {{/* One segmented bar per deck: mastered (mint), in progress (sky),
+                     not started (pink). Scrolls with the retro scrollbar. */}}
+    <div class="flex flex-col gap-3 max-h-56 overflow-y-auto retro-scroll pr-1">
       {{range .}}
-        <span
-          style="width: {{.Width}}%;
-                 background: {{.Color}}"
-          title="{{.Title}}"
-        ></span>
+        <div class="flex flex-col gap-1">
+          <div class="flex items-center justify-between text-[13px]">
+            <span>{{.Name}}</span>
+            <b>{{.Mastered}}/{{.Total}}</b>
+          </div>
+          <div
+            class="flex h-3 rounded-full border-2 border-ink overflow-hidden"
+          >
+            <span
+              style="width: {{.MasteredPct}}%;
+                     background: #4FDDC7"
+              title="Mastered: {{.Mastered}}"
+            ></span>
+            <span
+              style="width: {{.LearningPct}}%;
+                     background: #94A9F0"
+              title="In progress: {{.Learning}}"
+            ></span>
+            <span
+              style="width: {{.NotStartedPct}}%;
+                     background: #FF8AE2"
+              title="Not started: {{.NotStarted}}"
+            ></span>
+          </div>
+        </div>
       {{end}}
     </div>
-    {{range .}}
-      <div class="flex items-center justify-between text-[13px]">
-        <span class="flex items-center gap-1.5">
-          <i
-            class="size-2.5 rounded-full border border-ink inline-block"
-            style="background: {{.Color}}"
-          ></i>
-          {{.Name}}
-        </span>
-        <b>{{.Mastered}}/{{.Total}}</b>
-      </div>
-    {{end}}
   </div>
 {{end}}

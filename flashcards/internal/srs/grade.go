@@ -10,27 +10,27 @@ import (
 // or 0-3) to a Grade.
 func ParseGrade(s string) (Grade, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "again", "0":
-		return Again, nil
+	case "forgot", "again", "0":
+		return Forgot, nil
 	case "hard", "1":
 		return Hard, nil
-	case "good", "2":
-		return Good, nil
+	case "medium", "good", "2":
+		return Medium, nil
 	case "easy", "3":
 		return Easy, nil
 	}
-	return Again, fmt.Errorf("invalid grade %q", s)
+	return Forgot, fmt.Errorf("invalid grade %q", s)
 }
 
 // Label is the human-readable name of a grade.
 func (g Grade) Label() string {
 	switch g {
-	case Again:
-		return "Again"
+	case Forgot:
+		return "Forgot"
 	case Hard:
 		return "Hard"
-	case Good:
-		return "Good"
+	case Medium:
+		return "Medium"
 	case Easy:
 		return "Easy"
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/infinage/go-experiments/flashcards/internal/srs"
 )
 
-var _ = srs.Good
+var _ = srs.Medium
 
 func TestStudyPageShowsDueCard(t *testing.T) {
 	h, db := realHandler(t)
@@ -62,7 +62,7 @@ func TestGradeCardFlow(t *testing.T) {
 	if rec.Code != 400 {
 		t.Fatalf("bad grade: %d", rec.Code)
 	}
-	_ = srs.Good
+	_ = srs.Medium
 }
 
 func TestSeedOnlyWhenEmpty(t *testing.T) {
@@ -83,7 +83,7 @@ func TestSeedOnlyWhenEmpty(t *testing.T) {
 		t.Fatalf("seed: %d", rec.Code)
 	}
 	cs, _ = db.Cards("", "", "")
-	if len(cs) != 42 {
+	if len(cs) != 58 {
 		t.Fatalf("cards after seed: %d", len(cs))
 	}
 }

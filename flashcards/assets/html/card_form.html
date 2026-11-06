@@ -36,7 +36,8 @@
       'imgName': '', 'audName': '', 'mediaKind': {{toSignal .MediaKind}},
       'delKind': '', 'revealed': false,
       'imgUrl': {{existingMediaURL .Card "image"}},
-      'audUrl': {{existingMediaURL .Card "audio"}}}"
+      'audUrl': {{existingMediaURL .Card "audio"}},
+      'statusLine': {{toSignal .StatusLine}}}"
   >
     <form action="/cards/save" enctype="multipart/form-data" method="post">
       <input name="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
@@ -259,6 +260,52 @@
     <div class="mt-6 lg:mt-0">
       <h2 class="text-sm font-bold mb-2">Preview</h2>
       {{template "cardFlip" .Preview}}
+      {{if .Card.ID}}
+        <div
+          id="card-status"
+          class="box p-3 mt-3 text-xs flex items-center justify-between
+                 gap-2"
+        >
+          <span data-text="$statusLine">{{.StatusLine}}</span>
+          <button
+            class="btn bg-white min-h-8"
+            data-attr:disabled="$anyBusyForm"
+            data-indicator:busy-reset-status
+            data-on:click="@post('/cards/{{.Card.ID}}/status/reset')"
+            type="button"
+          >
+            <span
+              class="spinner"
+              data-show="$busyResetStatus"
+              style="display: none"
+            ></span>
+            Reset status
+          </button>
+        </div>
+      {{end}}
     </div>
+  </div>
+{{end}}
+
+{{define "card-status"}}
+  <div
+    id="card-status"
+    class="box p-3 mt-3 text-xs flex items-center justify-between gap-2"
+  >
+    <span data-text="$statusLine">{{.Line}}</span>
+    <button
+      class="btn bg-white min-h-8"
+      data-attr:disabled="$anyBusy"
+      data-indicator:busy-reset-status
+      data-on:click="@post('/cards/{{.ID}}/status/reset')"
+      type="button"
+    >
+      <span
+        class="spinner"
+        data-show="$busyResetStatus"
+        style="display: none"
+      ></span>
+      Reset status
+    </button>
   </div>
 {{end}}
