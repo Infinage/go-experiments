@@ -81,8 +81,21 @@ type cardFormData struct {
 	Categories []string
 	Error      string
 	Preview    cardFlipView
+	// MediaKind is the selected front-media type: "", "image" or "audio".
+	MediaKind string
 	// Form values echoed back after a failed validation.
 	Front, Back, Category string
+}
+
+// mediaKindOf derives the toggle state from a card's stored media.
+func mediaKindOf(c store.Card) string {
+	switch {
+	case c.HasImage:
+		return "image"
+	case c.HasAudio:
+		return "audio"
+	}
+	return ""
 }
 
 // cardPageData wraps the form data with the page title.
@@ -122,7 +135,8 @@ func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, "EditCard", cardFormData{Card: c, Categories: names,
 		Front: c.Front, Back: c.Back, Category: c.Category,
-		Preview: previewCardFlip(c.Front, c.Back, c)})
+		MediaKind: mediaKindOf(c),
+		Preview:   previewCardFlip(c.Front, c.Back, c)})
 }
 
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
@@ -161,15 +175,17 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.saveMedia(w, r, id); err != nil {
+	if err := s.saveMedia(r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	http.Redirect(w, r, "/cards", http.StatusSeeOther)
 }
 
-// saveMedia stores uploaded card-front media, if any.
-func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request, id int64) error {
+// saveMedia stores the card-front media, enforcing image-XOR-audio: a
+// card may carry an image or audio, never both. The form's media_kind
+// field drives the cleanup of the unselected type.
+func (s *Server) saveMedia(r *http.Request, id int64) error {
 	image, err := readUpload(r, "front_image", "image")
 	if err != nil {
 		return err
@@ -181,21 +197,40 @@ func (s *Server) saveMedia(w http.ResponseWriter, r *http.Request, id int64) err
 			return err
 		}
 	}
-	if image.Bytes != nil {
-		if err := s.store.SetImage(id, image); err != nil {
-			return err
-		}
-	}
 	audio, err := readUpload(r, "front_audio", "audio")
 	if err != nil {
 		return err
 	}
-	if audio.Bytes != nil {
+
+	clearErr := func(err error) error {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	kind := r.FormValue("media_kind")
+	switch {
+	case image.Bytes != nil:
+		if err := s.store.SetImage(id, image); err != nil {
+			return err
+		}
+		return clearErr(s.store.ClearAudio(id))
+	case audio.Bytes != nil:
 		if err := s.store.SetAudio(id, audio); err != nil {
 			return err
 		}
+		return clearErr(s.store.ClearImage(id))
+	case kind == "image":
+		return clearErr(s.store.ClearAudio(id))
+	case kind == "audio":
+		return clearErr(s.store.ClearImage(id))
+	default:
+		// No media selected: clear whatever was there.
+		if err := clearErr(s.store.ClearImage(id)); err != nil {
+			return err
+		}
+		return clearErr(s.store.ClearAudio(id))
 	}
-	return nil
 }
 
 func (s *Server) deleteCards(w http.ResponseWriter, r *http.Request) {

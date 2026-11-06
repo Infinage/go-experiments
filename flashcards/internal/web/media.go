@@ -55,10 +55,11 @@ func (s *Server) deleteMedia(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// Clear the preview signals so the UI drops the media immediately.
-	payload := `{"imgUrl": "", "imgName": ""}`
+	// Clear the preview signals so the UI drops the media immediately,
+	// plus the busy signal of the (now replaced) triggering button.
+	payload := `{"imgUrl": "", "imgName": "", "busyDelImg": false}`
 	if sig.Kind == "audio" {
-		payload = `{"audUrl": "", "audName": ""}`
+		payload = `{"audUrl": "", "audName": "", "busyDelAud": false}`
 	}
 	if err := datastar.NewSSE(w, r).
 		PatchSignals([]byte(payload)); err != nil {

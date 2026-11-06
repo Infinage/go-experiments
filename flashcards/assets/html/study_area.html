@@ -1,5 +1,11 @@
 {{define "study-area"}}
-  <div id="study-area" class="contents">
+  <div
+    id="study-area"
+    class="contents"
+    data-computed:any-busy="!!($busyShuffle || $busyAgain || $busyHard ||
+    $busyGood || $busyEasy || $busyPrev || $busyNext || $busyReset ||
+    $busyDelImg || $busyDelAud)"
+  >
     {{if .Card}}
       <div class="flex-1 min-w-0 flex flex-col">
         {{/* Filter bar: category select, hide-mastered, shuffle. */}}
@@ -40,15 +46,15 @@
           </div>
           <button
             class="btn bg-white hover:bg-sun"
-            data-attr:disabled="$busy"
-            data-indicator:busy
+            data-attr:disabled="$anyBusy"
+            data-indicator:busy-shuffle
             data-on:click="$revealed = false; $shuffleSeed = Date.now();
           $idx = 0; @get('/')"
             type="button"
           >
             <span
               class="spinner"
-              data-show="$busy"
+              data-show="$busyShuffle"
               style="display: none"
             ></span>
             Shuffle
@@ -66,15 +72,15 @@
           {{range $g := gradeChoices}}
             <button
               class="btn bg-white hover:bg-sun"
-              data-attr:disabled="$busy"
-              data-indicator:busy
+              data-attr:disabled="$anyBusy"
+              data-indicator:busy-{{$g.Value}}
               data-on:click="$grade = '{{$g.Value}}';
             @post('/study/{{$.Card.ID}}/grade')"
               type="button"
             >
               <span
                 class="spinner"
-                data-show="$busy"
+                data-show="$busy{{$g.Label}}"
                 style="display: none"
               ></span>
               {{$g.Label}}
@@ -87,8 +93,8 @@
           <button
             class="btn bg-white hover:bg-sun
                    {{if le .Idx 0}}opacity-50 pointer-events-none{{end}}"
-            data-attr:disabled="$busy"
-            data-indicator:busy
+            data-attr:disabled="$anyBusy"
+            data-indicator:busy-prev
             data-on:click="$idx = $idx - 1; $revealed = false; @get('/')"
             type="button"
           >← Previous</button>
@@ -96,8 +102,8 @@
           <button
             class="btn bg-white hover:bg-sun
                    {{if ge .Idx (sub .Count 1)}}opacity-50 pointer-events-none{{end}}"
-            data-attr:disabled="$busy"
-            data-indicator:busy
+            data-attr:disabled="$anyBusy"
+            data-indicator:busy-next
             data-on:click="$idx = $idx + 1; $revealed = false; @get('/')"
             type="button"
           >Next →</button>
@@ -181,8 +187,8 @@
     {{end}}
     <aside class="hidden md:flex md:flex-col md:gap-3 md:w-80 md:flex-none">
       {{template "statsBox" .Stats}}
-      {{if .Decks}}
-        {{template "decksBox" .Decks}}
+      {{if .DeckBar}}
+        {{template "decksBox" .DeckBar}}
       {{end}}
     </aside>
   </div>
@@ -198,15 +204,15 @@
   >Reset progress</button>
   <button
     class="btn"
-    data-attr:disabled="$busy"
-    data-indicator:busy
+    data-attr:disabled="$anyBusy"
+    data-indicator:busy-reset
     data-on:click="@post('/study/reset')"
     data-show="$confirm"
     style="display: none;
            background: var(--color-rose)"
     type="button"
   >
-    <span class="spinner" data-show="$busy" style="display: none"></span>
+    <span class="spinner" data-show="$busyReset" style="display: none"></span>
     Really reset?
   </button>
 {{end}}
@@ -246,17 +252,29 @@
 {{end}}
 
 {{define "decksBox"}}
-  <div class="box p-4 flex flex-col gap-2.5">
+  <div class="box p-4 flex flex-col gap-3">
     <b class="text-[15px]">Decks</b>
+    {{/* Stacked bar: one segment per category, colored by its progress;
+               hover shows the deck name and progress. */}}
+    <div class="flex h-4 rounded-full border-2 border-ink overflow-hidden">
+      {{range .}}
+        <span
+          style="width: {{.Width}}%;
+                 background: {{.Color}}"
+          title="{{.Title}}"
+        ></span>
+      {{end}}
+    </div>
     {{range .}}
-      <div class="flex flex-col gap-1">
-        <div class="flex items-center justify-between text-[13px]">
-          <span>{{.Name}}</span>
-          <b>{{.Mastered}}/{{.Total}}</b>
-        </div>
-        <div class="track">
-          <div style="width: {{percent .Mastered .Total}}%"></div>
-        </div>
+      <div class="flex items-center justify-between text-[13px]">
+        <span class="flex items-center gap-1.5">
+          <i
+            class="size-2.5 rounded-full border border-ink inline-block"
+            style="background: {{.Color}}"
+          ></i>
+          {{.Name}}
+        </span>
+        <b>{{.Mastered}}/{{.Total}}</b>
       </div>
     {{end}}
   </div>

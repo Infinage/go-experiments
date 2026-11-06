@@ -17,7 +17,7 @@
       <div class="mx-auto w-full max-w-6xl px-4 md:px-8">
         {{template "header" "cards"}}
         <main class="pb-8">
-          <div class="mx-auto max-w-2xl">
+          <div class="mx-auto max-w-4xl">
             <h1 class="text-xl font-bold mb-4">{{.Title}}</h1>
             {{template "cardForm" .Data}}
           </div>
@@ -28,175 +28,237 @@
 {{end}}
 
 {{define "cardForm"}}
-  <form action="/cards/save" enctype="multipart/form-data" method="post">
-    <input name="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
-    {{with .Error}}
-      <p class="box p-3 text-sm mb-4">{{.}}</p>
-    {{end}}
-    <div class="flex flex-col gap-4">
-      <label class="flex flex-col gap-1 text-sm font-semibold">
-        Front
-        <textarea
-          class="box px-3 py-2 bg-white outline-none font-normal"
-          data-bind="front"
-          name="front"
-          placeholder="Question"
-          required
-          rows="3"
-          spellcheck="false"
-        >{{.Front}}</textarea>
-      </label>
-      <label class="flex flex-col gap-1 text-sm font-semibold">
-        Back
-        <textarea
-          class="box px-3 py-2 bg-white outline-none font-normal"
-          data-bind="back"
-          name="back"
-          placeholder="Answer"
-          required
-          rows="3"
-          spellcheck="false"
-        >{{.Back}}</textarea>
-      </label>
-      <label class="flex flex-col gap-1 text-sm font-semibold">
-        Category
-        <input
-          class="box px-3 h-11 bg-white outline-none font-normal"
-          list="category-list"
-          name="category"
-          placeholder="e.g. web (optional)"
-          spellcheck="false"
-          value="{{.Category}}"
-        >
-        <datalist id="category-list">
-          {{range .Categories}}
-            <option value="{{.}}"></option>
-          {{end}}
-        </datalist>
-      </label>
-      <fieldset class="flex flex-col gap-2 text-sm font-semibold">
-        <legend>Front media (optional)</legend>
-        <label
-          class="flex items-center gap-2 box px-2 h-11 bg-white
-                 font-normal cursor-pointer"
-        >
-          <input
-            class="sr-only"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            data-on:change="$imgUrl = evt.target.files.length
-              ? URL.createObjectURL(evt.target.files[0])
-              : ''; $imgName = evt.target.files[0]?.name || '';"
-            name="front_image"
-            type="file"
-          >
-          <span class="font-semibold text-xs w-14">Image</span>
-          <span
-            class="inline-flex items-center justify-center bg-sun
-                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                   text-xs text-ink"
-          >Choose file</span>
-          <span
-            class="text-xs text-ink/60 truncate"
-            data-text="$imgName || 'No file chosen'"
-          ></span>
-        </label>
-        <label
-          class="flex items-center gap-2 box px-2 h-11 bg-white
-                 font-normal cursor-pointer"
-        >
-          <input
-            class="sr-only"
-            accept="image/*"
-            capture="environment"
-            data-on:change="$imgUrl = evt.target.files.length
-              ? URL.createObjectURL(evt.target.files[0])
-              : ''; $imgName = evt.target.files[0]?.name || '';"
-            name="front_image_camera"
-            type="file"
-          >
-          <span class="font-semibold text-xs w-14">Camera</span>
-          <span
-            class="inline-flex items-center justify-center bg-sun
-                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                   text-xs text-ink"
-          >Take photo</span>
-          <span
-            class="text-xs text-ink/60 truncate"
-            data-text="$imgName || ''"
-          ></span>
-        </label>
-        <label
-          class="flex items-center gap-2 box px-2 h-11 bg-white
-                 font-normal cursor-pointer"
-        >
-          <input
-            id="front-audio-input"
-            class="sr-only"
-            accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
-            data-on:change="$audUrl = evt.target.files.length
-              ? URL.createObjectURL(evt.target.files[0])
-              : ''; $audName = evt.target.files[0]?.name || '';"
-            name="front_audio"
-            type="file"
-          >
-          <span class="font-semibold text-xs w-14">Audio</span>
-          <span
-            class="inline-flex items-center justify-center bg-sun
-                   border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                   text-xs text-ink"
-          >Choose file</span>
-          <span
-            class="text-xs text-ink/60 truncate"
-            data-text="$audName || 'No file chosen'"
-          ></span>
-        </label>
-        <div class="flex flex-wrap items-center gap-2">
-          <button
-            class="btn bg-white min-h-9"
-            data-record-target="#front-audio-input"
-            type="button"
-          >Record audio</button>
-          {{if .Card.ID}}
-            <button
-              class="btn bg-white min-h-9"
-              data-attr:disabled="$busy"
-              data-indicator:busy
-              data-on:click="$delKind = 'image';
-                @post('/cards/{{.Card.ID}}/media/delete')"
-              data-show="$imgUrl"
-              style="display: none"
-              type="button"
-            >Remove image</button>
-            <button
-              class="btn bg-white min-h-9"
-              data-attr:disabled="$busy"
-              data-indicator:busy
-              data-on:click="$delKind = 'audio';
-                @post('/cards/{{.Card.ID}}/media/delete')"
-              data-show="$audUrl"
-              style="display: none"
-              type="button"
-            >Remove audio</button>
-          {{end}}
-        </div>
-      </fieldset>
-      <div class="flex gap-2">
-        <button class="btn-sun" type="submit">Save</button>
-        <a class="btn bg-white" href="/cards">Cancel</a>
-      </div>
-    </div>
-  </form>
-
-  {{/* Miniature live preview, same flip card as the study view. */}}
+  {{$hasCard := .Card.ID}}
   <div
-    class="mt-6"
+    class="lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8 lg:items-start"
+    data-computed:any-busy="!!($busyDelImg || $busyDelAud)"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
-      'imgName': '', 'audName': '',
-      'revealed': false, 'delKind': '',
+      'imgName': '', 'audName': '', 'mediaKind': {{toSignal .MediaKind}},
+      'delKind': '', 'revealed': false,
       'imgUrl': {{existingMediaURL .Card "image"}},
       'audUrl': {{existingMediaURL .Card "audio"}}}"
   >
-    <h2 class="text-sm font-bold mb-2">Preview</h2>
-    <div class="max-w-sm mx-auto">{{template "cardFlip" .Preview}}</div>
+    <form action="/cards/save" enctype="multipart/form-data" method="post">
+      <input name="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
+      <input data-bind="mediaKind" name="media_kind" type="hidden">
+      {{with .Error}}
+        <p class="box p-3 text-sm mb-4">{{.}}</p>
+      {{end}}
+      <div class="flex flex-col gap-4">
+        <label class="flex flex-col gap-1 text-sm font-semibold">
+          Front
+          <textarea
+            class="box px-3 py-2 bg-white outline-none font-normal"
+            data-bind="front"
+            name="front"
+            placeholder="Question"
+            required
+            rows="3"
+            spellcheck="false"
+          >{{.Front}}</textarea>
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-semibold">
+          Back
+          <textarea
+            class="box px-3 py-2 bg-white outline-none font-normal"
+            data-bind="back"
+            name="back"
+            placeholder="Answer"
+            required
+            rows="3"
+            spellcheck="false"
+          >{{.Back}}</textarea>
+        </label>
+        <label class="flex flex-col gap-1 text-sm font-semibold">
+          Category
+          <input
+            class="box px-3 h-11 bg-white outline-none font-normal"
+            list="category-list"
+            name="category"
+            placeholder="e.g. web (optional)"
+            spellcheck="false"
+            value="{{.Category}}"
+          >
+          <datalist id="category-list">
+            {{range .Categories}}
+              <option value="{{.}}"></option>
+            {{end}}
+          </datalist>
+        </label>
+
+        <fieldset class="flex flex-col gap-2 text-sm font-semibold">
+          <legend>Front media (optional — image or audio, not both)</legend>
+          {{/* Single toggle: None / Image / Audio. */}}
+          <div class="flex gap-1.5">
+            <button
+              class="btn h-11"
+              data-class="{'bg-white': $mediaKind !== '',
+                'bg-sun': $mediaKind === ''}"
+              data-on:click="$mediaKind = ''; $imgUrl = ''; $imgName = '';
+                $audUrl = ''; $audName = ''"
+              type="button"
+            >None</button>
+            <button
+              class="btn h-11"
+              data-class="{'bg-white': $mediaKind !== 'image',
+                'bg-sun': $mediaKind === 'image'}"
+              data-on:click="$mediaKind = 'image'; $audUrl = '';
+                $audName = ''"
+              type="button"
+            >Image</button>
+            <button
+              class="btn h-11"
+              data-class="{'bg-white': $mediaKind !== 'audio',
+                'bg-sun': $mediaKind === 'audio'}"
+              data-on:click="$mediaKind = 'audio'; $imgUrl = '';
+                $imgName = ''"
+              type="button"
+            >Audio</button>
+          </div>
+
+          {{/* Image options. */}}
+          <div
+            class="flex flex-col gap-2"
+            data-show="$mediaKind === 'image'"
+            style="display: none"
+          >
+            <label
+              class="flex items-center gap-2 box px-2 h-11 bg-white
+                     font-normal cursor-pointer"
+            >
+              <input
+                class="sr-only"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                data-on:change="$imgUrl = evt.target.files.length
+                  ? URL.createObjectURL(evt.target.files[0])
+                  : ''; $imgName = evt.target.files[0]?.name || ''"
+                name="front_image"
+                type="file"
+              >
+              <span
+                class="inline-flex items-center justify-center bg-sun
+                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                       text-xs text-ink"
+              >Upload image</span>
+              <span
+                class="text-xs text-ink/60 truncate"
+                data-text="$imgName || 'No file chosen'"
+              ></span>
+            </label>
+            <label
+              class="flex items-center gap-2 box px-2 h-11 bg-white
+                     font-normal cursor-pointer"
+            >
+              <input
+                class="sr-only"
+                accept="image/*"
+                capture="environment"
+                data-on:change="$imgUrl = evt.target.files.length
+                  ? URL.createObjectURL(evt.target.files[0])
+                  : ''; $imgName = evt.target.files[0]?.name || ''"
+                name="front_image_camera"
+                type="file"
+              >
+              <span
+                class="inline-flex items-center justify-center bg-sun
+                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                       text-xs text-ink"
+              >Take photo</span>
+              <span
+                class="text-xs text-ink/60 truncate"
+                data-text="$imgName || 'Opens the camera on mobile'"
+              ></span>
+            </label>
+            {{if .Card.ID}}
+              <button
+                class="btn bg-white min-h-9 w-fit"
+                data-attr:disabled="$anyBusy"
+                data-indicator:busy-del-img
+                data-on:click="$delKind = 'image'; $mediaKind = '';
+                  $imgUrl = ''; $imgName = '';
+                  @post('/cards/{{.Card.ID}}/media/delete')"
+                data-show="$imgUrl"
+                style="display: none"
+                type="button"
+              >
+                <span
+                  class="spinner"
+                  data-show="$busyDelImg"
+                  style="display: none"
+                ></span>
+                Remove image
+              </button>
+            {{end}}
+          </div>
+
+          {{/* Audio options. */}}
+          <div
+            class="flex flex-col gap-2"
+            data-show="$mediaKind === 'audio'"
+            style="display: none"
+          >
+            <label
+              class="flex items-center gap-2 box px-2 h-11 bg-white
+                     font-normal cursor-pointer"
+            >
+              <input
+                id="front-audio-input"
+                class="sr-only"
+                accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
+                data-on:change="$audUrl = evt.target.files.length
+                  ? URL.createObjectURL(evt.target.files[0])
+                  : ''; $audName = evt.target.files[0]?.name || ''"
+                name="front_audio"
+                type="file"
+              >
+              <span
+                class="inline-flex items-center justify-center bg-sun
+                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
+                       text-xs text-ink"
+              >Upload audio</span>
+              <span
+                class="text-xs text-ink/60 truncate"
+                data-text="$audName || 'No file chosen'"
+              ></span>
+            </label>
+            <button
+              class="btn bg-white min-h-9 w-fit"
+              data-record-target="#front-audio-input"
+              type="button"
+            >Record audio</button>
+            {{if .Card.ID}}
+              <button
+                class="btn bg-white min-h-9 w-fit"
+                data-attr:disabled="$anyBusy"
+                data-indicator:busy-del-aud
+                data-on:click="$delKind = 'audio'; $mediaKind = '';
+                  $audUrl = ''; $audName = '';
+                  @post('/cards/{{.Card.ID}}/media/delete')"
+                data-show="$audUrl"
+                style="display: none"
+                type="button"
+              >
+                <span
+                  class="spinner"
+                  data-show="$busyDelAud"
+                  style="display: none"
+                ></span>
+                Remove audio
+              </button>
+            {{end}}
+          </div>
+        </fieldset>
+        <div class="flex gap-2">
+          <button class="btn-sun" type="submit">Save</button>
+          <a class="btn bg-white" href="/cards">Cancel</a>
+        </div>
+      </div>
+    </form>
+
+    {{/* Live preview beside the form on large screens. */}}
+    <div class="mt-6 lg:mt-0">
+      <h2 class="text-sm font-bold mb-2">Preview</h2>
+      {{template "cardFlip" .Preview}}
+    </div>
   </div>
 {{end}}

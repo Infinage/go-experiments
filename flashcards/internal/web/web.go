@@ -45,8 +45,7 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 			b, _ := json.Marshal(s)
 			return string(b)
 		},
-		// mediaType/mediaColor describe a card's front media for the
-		// cards-grid header strip.
+		// mediaType describes a card's front media for the grid label.
 		"mediaType": func(c store.Card) string {
 			switch {
 			case c.HasImage:
@@ -57,14 +56,16 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 				return "TEXT"
 			}
 		},
-		"mediaColor": func(c store.Card) string {
-			switch {
-			case c.HasImage:
-				return "var(--color-mint)"
-			case c.HasAudio:
-				return "var(--color-sky)"
+		// statusColor colors a card's header strip by review progress.
+		// Plain hex values: html/template's CSS filter rejects var().
+		"statusColor": func(status string) string {
+			switch status {
+			case "mastered":
+				return "#4FDDC7"
+			case "learning":
+				return "#94A9F0"
 			default:
-				return "var(--color-pink)"
+				return "#FF8AE2"
 			}
 		},
 		"statusLabel": func(status string) string {
@@ -131,11 +132,12 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 }
 
 // templateHTML executes a named template to a string, for Datastar
-// fragments. On error it returns an empty string; render() logs errors for
-// full-page renders, and here the error is swallowed the same way.
+// fragments. On error it logs and returns an empty string (the client
+// keeps the current DOM, which beats a half-rendered fragment).
 func (s *Server) templateHTML(name string, data any) string {
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		log.Printf("render %s fragment: %v", name, err)
 		return ""
 	}
 	return buf.String()

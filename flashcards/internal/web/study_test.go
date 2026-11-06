@@ -83,7 +83,7 @@ func TestSeedOnlyWhenEmpty(t *testing.T) {
 		t.Fatalf("seed: %d", rec.Code)
 	}
 	cs, _ = db.Cards("", "", "")
-	if len(cs) != 5 {
+	if len(cs) != 42 {
 		t.Fatalf("cards after seed: %d", len(cs))
 	}
 }
