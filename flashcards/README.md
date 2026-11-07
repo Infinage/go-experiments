@@ -7,6 +7,13 @@ A retro-styled, single-user flashcard app with SM-2 spaced repetition.
   only); media is stored as BLOBs in SQLite
 - Study mode (default) with flip, grade (Forgot/Hard/Medium/Easy), shuffle,
   paging, category filter and "hide mastered"
+- A *pass* = the cards you see between "All caught up" states: grading a
+  card slots it into the future (it leaves the pass); Forgot keeps it and
+  requeues it once at the end; a forgotten-twice card is dropped for the
+  pass. "Review anyway" starts a flash pass over every card, due or not —
+  the counter shows "Card x of y", where y = remaining cards + already
+  graded this pass, and therefore never shrinks from paging and always
+  terminates
 - All cards view with search, media/category filters, bulk delete
 - Per-category "decks" progress; reset progress per category or all
 - Backup/export = copy the SQLite file

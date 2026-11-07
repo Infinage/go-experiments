@@ -32,10 +32,11 @@ cards(id INTEGER PK, front_text, back_text,
       front_image BLOB, front_image_mime,
       front_audio BLOB, front_audio_mime,      -- media on the front only; back is text only
       created_at, updated_at)
-reviews_state(card_id PK→cards ON DELETE CASCADE,
-      due_at, interval_days, ease REAL DEFAULT 2.5, repetitions, lapses,
-      mastered BOOL)
+review_state(card_id PK→cards ON DELETE CASCADE,
+      due_at, interval_days, ease REAL, repetitions, lapses)
 review_log(id, card_id, reviewed_at, grade)      -- optional, for stats
+-- Status is derived per review_state: 'new' (no row), 'mastered'
+-- (interval_days >= 21), else 'learning'. No mastered boolean.
 ```
 - Media is served from `GET /cards/{id}/media/{image|audio}` (with `Content-Type`, ETag, and Range for audio). Don't inline BLOBs into list queries; select them only in the media handler.
 - Upload limit (e.g. 5 MB image, 10 MB audio). Images are downscaled client-side, or the limit is enforced server-side.
@@ -43,11 +44,15 @@ review_log(id, card_id, reviewed_at, grade)      -- optional, for stats
 - Embedded migrations (simple `user_version` runner).
 
 ## SRS (SM-2 style)
-- Grades in the UI: **Again / Hard / Good / Easy**, which map to SM-2 quality scores.
-- Again → repetitions=0, interval=1d (or a short in-session requeue), lapses++.
+- Grades in the UI: **Forgot / Hard / Medium / Easy**, which map to SM-2
+  quality scores.
+- Forgot → repetitions=0, interval=0, ease −0.20, lapses++, due immediately;
+  the card requeues in-session once at the end of the pass.
 - Otherwise interval = 1, 6, then interval × ease; ease is adjusted and clamped to ≥ 1.3.
 - "Mastered" = interval ≥ 21 days (threshold constant). "Hide mastered" is a study filter.
-- Study queue = cards with `due_at <= now`, plus new cards up to a daily cap. Empty queue → the "All caught up" screen with the next due time.
+- Study queue = cards with `due_at <= now`, plus all never-reviewed cards
+  (no daily cap). Empty queue → the "All caught up" screen with the next
+  due time.
 - `srs` is pure and takes `now` as a parameter, so it's deterministic to test.
 
 ## Screens and routes (Datastar)
