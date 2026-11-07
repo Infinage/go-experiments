@@ -1,1 +1,4 @@
-/tmp/
+bin/
+*.db
+*.db-*
+tmp/
