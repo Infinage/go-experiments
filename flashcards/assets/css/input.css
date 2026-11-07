@@ -154,3 +154,13 @@ button:disabled,
 [disabled] {
   cursor: not-allowed;
 }
+
+/* Mic recording state: show the live row, hide the idle helper rows.
+   A class (not inline styles) so datastar's own display handling on
+   the data-show elements does not fight the recorder. */
+.recording [data-record-live] {
+  display: flex !important; /* beats the inline display:none of the idle row */
+}
+.recording [data-record-hide] {
+  display: none !important;
+}

@@ -113,7 +113,12 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 		return nil, err
 	}
 	if sig.ShuffleSeed > 0 {
-		shuffle(q[:len(q)-len(sig.RequeuedIDs)], sig.ShuffleSeed)
+		// Requeued cards are appended after the head, so exclude the tail;
+		// guard against a stale requeuedIds list longer than the queue
+		// itself (e.g. after switching to a smaller category filter).
+		if n := max(0, len(q)-len(sig.RequeuedIDs)); n > 0 {
+			shuffle(q[:n], sig.ShuffleSeed)
+		}
 	}
 	// Clamp the position into the (possibly shorter) queue.
 	idx := sig.Idx
@@ -267,8 +272,8 @@ func categoryIn(cats []store.Category, category string) string {
 // replace the triggering button mid-flight, so its indicator cleanup
 // never runs client-side; the response clears the signals instead.
 func busyResetSignals() []byte {
-	return []byte(`{"busyShuffle": false, "busyAgain": false,
-		"busyHard": false, "busyGood": false, "busyEasy": false,
+	return []byte(`{"busyShuffle": false, "busyForgot": false,
+		"busyHard": false, "busyMedium": false, "busyEasy": false,
 		"busyPrev": false, "busyNext": false, "busyReset": false}`)
 }
 
@@ -294,15 +299,19 @@ func (s *Server) gradeCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The graded card leaves the queue; keep the index so the next card
-	// slides in, and reset the flip + paging signals.
+	// slides in (the removed card's successor takes its slot), and reset
+	// only the flip signal.
 	d, err := s.studyData(sig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Echo the (possibly clamped) index back: after grading the last
+	// card in the queue the successor shifts up and the client's $idx
+	// would otherwise point past the end.
 	sse := datastar.NewSSE(w, r)
-	if err := sse.PatchSignals([]byte(
-		`{"revealed": false, "idx": 0, "grade": ""}`)); err != nil {
+	if err := sse.PatchSignals([]byte(`{"revealed": false, "grade": "", "idx": ` +
+		strconv.Itoa(d.Idx) + `}`)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

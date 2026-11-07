@@ -31,11 +31,10 @@
   {{$hasCard := .Card.ID}}
   <div
     class="lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8 lg:items-start"
-    data-computed:any-busy="!!($busyDelImg || $busyDelAud)"
+    data-computed:any-busy="!!($busyDelImg || $busyDelAud || $busyResetStatus)"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
       'imgName': '', 'audName': '',
       'mediaKind': {{toSignal .MediaKind}},
-      'imgMode': 'upload', 'audMode': 'upload',
       'delKind': '', 'revealed': false,
       'imgUrl': {{existingMediaURL .Card "image"}},
       'audUrl': {{existingMediaURL .Card "audio"}},
@@ -90,63 +89,152 @@
         </label>
 
         <fieldset class="flex flex-col gap-2 text-sm font-semibold">
-          <legend>Front media (optional — image or audio, not both)</legend>
-          {{/* Single toggle: None / Image / Audio. */}}
-          <div class="flex gap-1.5">
+          <legend>Front media <span class="font-normal text-ink/60">(optional — image or audio, not both)</span></legend>
+          {{/* Kind pills: None / Image / Audio. */}}
+          <div class="flex gap-2" role="group" aria-label="Front media type">
             <button
-              class="btn h-11"
+              class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== '',
-                'bg-sun': $mediaKind === ''}"
+                'bg-pink': $mediaKind === ''}"
               data-on:click="$mediaKind = ''; $imgUrl = ''; $imgName = '';
                 $audUrl = ''; $audName = ''"
               type="button"
             >None</button>
             <button
-              class="btn h-11"
+              class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== 'image',
-                'bg-sun': $mediaKind === 'image'}"
+                'bg-pink': $mediaKind === 'image'}"
               data-on:click="$mediaKind = 'image'; $audUrl = '';
                 $audName = ''"
               type="button"
-            >Image</button>
+            >
+              <svg class="size-4" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true"
+              ><rect x="3" y="3" width="18" height="18" rx="2"
+                /><circle cx="9" cy="9" r="1.5"/><path
+                d="m21 15-5-5L5 21"/></svg>
+              Image
+            </button>
             <button
-              class="btn h-11"
+              class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== 'audio',
-                'bg-sun': $mediaKind === 'audio'}"
+                'bg-pink': $mediaKind === 'audio'}"
               data-on:click="$mediaKind = 'audio'; $imgUrl = '';
                 $imgName = ''"
               type="button"
-            >Audio</button>
+            >
+              <svg class="size-4" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true"
+              ><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path
+                d="M21 19a2 2 0 0 1-2 2h-1v-7h3zM3 19a2 2 0 0 0 2 2h1v-7H3z"/>
+              </svg>
+              Audio
+            </button>
           </div>
 
-          {{/* Image options: a switch between Upload and Camera. Switching
-                           clears both inputs so only ever one file is set. */}}
+          {{/* Image panel: actions, dashed empty state, picked state. */}}
           <div
-            class="flex flex-col gap-2"
+            class="box p-3 flex flex-col gap-3 font-normal"
             data-show="$mediaKind === 'image'"
             style="display: none"
           >
-            <div class="flex gap-1.5">
+            <div class="flex flex-wrap items-center gap-2" data-show="!$imgUrl">
               <button
-                class="btn h-9"
-                data-class="{'bg-white': $imgMode !== 'upload',
-                  'bg-sun': $imgMode === 'upload'}"
-                data-on:click="$imgMode = 'upload'; $imgUrl = '';
-                  $imgName = '';
-                  document.querySelectorAll('[name^=front_image]').
-                    forEach(i => i.value = '');"
+                class="btn-sun min-h-9 px-3"
+                data-on:click="var i = document.querySelector(
+                  '[name=front_image]'); i.value = ''; i.click();"
                 type="button"
-              >Upload</button>
+              >
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  aria-hidden="true"
+                ><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path
+                  d="M5 21h14"/></svg>
+                Upload
+              </button>
               <button
-                class="btn h-9"
-                data-class="{'bg-white': $imgMode !== 'camera',
-                  'bg-sun': $imgMode === 'camera'}"
-                data-on:click="$imgMode = 'camera'; $imgUrl = '';
-                  $imgName = '';
-                  document.querySelectorAll('[name^=front_image]').
-                    forEach(i => i.value = '');"
+                class="btn bg-white min-h-9 px-3"
+                data-camera-target="#front-image-camera"
                 type="button"
-              >Camera</button>
+              >
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  aria-hidden="true"
+                ><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2
+                  2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13"
+                  r="3.5"/></svg>
+                Camera
+              </button>
+              <span class="text-xs text-ink/60">PNG/JPEG/WebP/GIF · max 5 MB</span>
+            </div>
+            <div
+              class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
+                     text-center text-xs text-ink/60"
+              data-show="!$imgUrl"
+            >
+              <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true"
+              ><rect x="3" y="3" width="18" height="18" rx="2"/><circle
+                cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              <b class="text-ink">Add a picture to the front</b><br>
+              Browse or drop an image — or snap one with the camera
+            </div>
+            <div class="flex items-center gap-3" data-show="$imgUrl">
+              <img
+                class="size-20 rounded-xl border-2 border-ink object-cover"
+                alt="Chosen front image"
+                data-attr:src="$imgUrl"
+              >
+              <div class="flex min-w-0 flex-col gap-1">
+                <span
+                  class="truncate text-xs font-semibold"
+                  data-text="$imgName || 'Current image'"
+                ></span>
+                <div class="flex gap-2">
+                  <button
+                    class="btn-sun min-h-9 px-3"
+                    data-on:click="var i = document.querySelector(
+                      '[name=front_image]'); i.value = ''; i.click();"
+                    type="button"
+                  >Replace</button>
+                  <button
+                    class="btn bg-white min-h-9 px-3"
+                    data-on:click="document.querySelector('[name=front_image]').
+                      value = ''; $imgUrl = ''; $imgName = ''"
+                    data-show="$imgName"
+                    style="display: none"
+                    type="button"
+                  >Remove</button>
+                  {{if .Card.ID}}
+                    <button
+                      class="btn bg-white min-h-9 px-3"
+                      data-attr:disabled="$anyBusy"
+                      data-indicator:busy-del-img
+                      data-on:click="$delKind = 'image'; $mediaKind = '';
+                        $imgUrl = ''; $imgName = '';
+                        @post('/cards/{{.Card.ID}}/media/delete')"
+                      data-show="$imgUrl && !$imgName"
+                      style="display: none"
+                      type="button"
+                    >
+                      <span
+                        class="spinner"
+                        data-show="$busyDelImg"
+                        style="display: none"
+                      ></span>
+                      Remove
+                    </button>
+                  {{end}}
+                </div>
+              </div>
             </div>
             <input
               class="sr-only"
@@ -154,148 +242,158 @@
               data-on:change="$imgUrl = evt.target.files.length
                 ? URL.createObjectURL(evt.target.files[0])
                 : ''; $imgName = evt.target.files[0]?.name || ''"
-              data-show="$imgMode === 'upload'"
               name="front_image"
-              style="display: none"
               type="file"
             >
             <input
+              id="front-image-camera"
               class="sr-only"
               accept="image/*"
               capture="environment"
               data-on:change="$imgUrl = evt.target.files.length
                 ? URL.createObjectURL(evt.target.files[0])
                 : ''; $imgName = evt.target.files[0]?.name || ''"
-              data-show="$imgMode === 'camera'"
               name="front_image_camera"
-              style="display: none"
               type="file"
             >
-            <label
-              class="flex items-center gap-2 box px-2 h-11 bg-white
-                     font-normal cursor-pointer"
-              data-on:click="document.querySelector($imgMode === 'camera'
-                ? 'input[name=front_image_camera]'
-                : 'input[name=front_image]').click()"
-            >
-              <span
-                class="inline-flex items-center justify-center bg-sun
-                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                       text-xs text-ink"
-              >{{if .Card.HasImage}}Replace image{{else}}Choose file{{end}}</span>
-              <span
-                class="text-xs text-ink/60 truncate"
-                data-text="$imgName
-                  || ($imgMode === 'camera'
-                    ? 'Opens the camera on mobile'
-                    : 'No file chosen')"
-              ></span>
-            </label>
-            {{if .Card.ID}}
-              <button
-                class="btn bg-white min-h-9 w-fit"
-                data-attr:disabled="$anyBusy"
-                data-indicator:busy-del-img
-                data-on:click="$delKind = 'image'; $mediaKind = '';
-                  $imgUrl = ''; $imgName = '';
-                  @post('/cards/{{.Card.ID}}/media/delete')"
-                data-show="$imgUrl"
-                style="display: none"
-                type="button"
-              >
-                <span
-                  class="spinner"
-                  data-show="$busyDelImg"
-                  style="display: none"
-                ></span>
-                Remove image
-              </button>
-            {{end}}
           </div>
 
-          {{/* Audio options: switch between Upload and Record. */}}
+          {{/* Audio panel: actions, recording state, empty and picked. */}}
           <div
-            class="flex flex-col gap-2"
+            class="box p-3 flex flex-col gap-3 font-normal"
             data-show="$mediaKind === 'audio'"
             style="display: none"
           >
-            <div class="flex gap-1.5">
-              <button
-                class="btn h-9"
-                data-class="{'bg-white': $audMode !== 'upload',
-                  'bg-sun': $audMode === 'upload'}"
-                data-on:click="$audMode = 'upload'; $audUrl = '';
-                  $audName = '';
-                  document.querySelector('[name=front_audio]').
-                    value = '';"
-                type="button"
-              >Upload</button>
-              <button
-                class="btn h-9"
-                data-class="{'bg-white': $audMode !== 'record',
-                  'bg-sun': $audMode === 'record'}"
-                data-on:click="$audMode = 'record'; $audUrl = '';
-                  $audName = '';
-                  document.querySelector('[name=front_audio]').
-                    value = '';"
-                type="button"
-              >Record</button>
-            </div>
             <input
               id="front-audio-input"
               class="sr-only"
-              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg"
+              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
               data-on:change="$audUrl = evt.target.files.length
                 ? URL.createObjectURL(evt.target.files[0])
                 : ''; $audName = evt.target.files[0]?.name || ''"
               name="front_audio"
               type="file"
             >
-            <button
-              class="btn bg-white min-h-9 w-fit"
-              data-record-target="#front-audio-input"
-              data-show="$audMode === 'record'"
-              style="display: none"
-              type="button"
-            >Record audio</button>
-            <label
-              class="flex items-center gap-2 box px-2 h-11 bg-white
-                     font-normal cursor-pointer"
-              data-on:click="document.querySelector(
-                '[name=front_audio]').click()"
-              data-show="$audMode === 'upload'"
+            <div
+              class="flex flex-wrap items-center gap-2"
+              data-record-hide
+              data-show="!$audUrl"
+            >
+              <button
+                class="btn-sun min-h-9 px-3"
+                data-on:click="var i = document.querySelector(
+                  '[name=front_audio]'); i.value = ''; i.click();"
+                type="button"
+              >
+                <svg class="size-3.5" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  aria-hidden="true"
+                ><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path
+                  d="M5 21h14"/></svg>
+                Upload
+              </button>
+              <button
+                class="btn bg-white min-h-9 px-3"
+                data-record-target="#front-audio-input"
+                type="button"
+              >{{if .Card.HasAudio}}Re-record audio{{else}}Record audio{{end}}</button>
+              <span class="text-xs text-ink/60">MP3/M4A/WAV/OGG · max 10 MB</span>
+            </div>
+            {{/* Live recording row; record.js toggles its visibility. */}}
+            <div
+              class="flex items-center gap-3"
+              data-record-live
               style="display: none"
             >
               <span
-                class="inline-flex items-center justify-center bg-sun
-                       border-2 border-ink rounded-full px-3 min-h-8 font-semibold
-                       text-xs text-ink"
-              >{{if .Card.HasAudio}}Replace audio{{else}}Choose file{{end}}</span>
-              <span
-                class="text-xs text-ink/60 truncate"
-                data-text="$audName || 'No file chosen'"
+                class="size-3 animate-pulse rounded-full bg-rose inline-block"
               ></span>
-            </label>
-            {{if .Card.ID}}
+              <span
+                class="font-variant-numeric tabular-nums font-bold text-sm"
+                data-record-timer
+              >0:00</span>
               <button
-                class="btn bg-white min-h-9 w-fit"
-                data-attr:disabled="$anyBusy"
-                data-indicator:busy-del-aud
-                data-on:click="$delKind = 'audio'; $mediaKind = '';
-                  $audUrl = ''; $audName = '';
-                  @post('/cards/{{.Card.ID}}/media/delete')"
-                data-show="$audUrl"
-                style="display: none"
+                class="btn-sun min-h-9 px-3"
+                data-record-target="#front-audio-input"
                 type="button"
+              >Stop</button>
+              <button
+                class="btn bg-white min-h-9 px-3"
+                data-record-cancel
+                type="button"
+              >Cancel</button>
+            </div>
+            <div
+              class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
+                     text-center text-xs text-ink/60"
+              data-record-hide
+              data-show="!$audUrl"
+            >
+              <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true"
+              ><rect x="9" y="2" width="6" height="12" rx="3"/><path
+                d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
+              <b class="text-ink">Add audio to the front</b><br>
+              Upload a clip or record straight from here
+            </div>
+            <div class="flex items-center gap-3" data-show="$audUrl">
+              <span
+                class="inline-flex size-9 items-center justify-center bg-sun
+                       border-2 border-ink rounded-full"
+                aria-hidden="true"
               >
+                <svg class="size-4" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"
+                ><rect x="9" y="2" width="6" height="12" rx="3"/><path
+                  d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
+              </span>
+              <div class="flex min-w-0 flex-col gap-1">
                 <span
-                  class="spinner"
-                  data-show="$busyDelAud"
-                  style="display: none"
+                  class="truncate text-xs font-semibold"
+                  data-text="$audName || 'Current audio'"
                 ></span>
-                Remove audio
-              </button>
-            {{end}}
+                <div class="flex gap-2">
+                  <button
+                    class="btn-sun min-h-9 px-3"
+                    data-on:click="var i = document.querySelector(
+                      '[name=front_audio]'); i.value = ''; i.click();"
+                    type="button"
+                  >Replace</button>
+                  <button
+                    class="btn bg-white min-h-9 px-3"
+                    data-on:click="document.querySelector('[name=front_audio]').
+                      value = ''; $audUrl = ''; $audName = ''"
+                    data-show="$audName"
+                    style="display: none"
+                    type="button"
+                  >Remove</button>
+                  {{if .Card.ID}}
+                    <button
+                      class="btn bg-white min-h-9 px-3"
+                      data-attr:disabled="$anyBusy"
+                      data-indicator:busy-del-aud
+                      data-on:click="$delKind = 'audio'; $mediaKind = '';
+                        $audUrl = ''; $audName = '';
+                        @post('/cards/{{.Card.ID}}/media/delete')"
+                      data-show="$audUrl && !$audName"
+                      style="display: none"
+                      type="button"
+                    >
+                      <span
+                        class="spinner"
+                        data-show="$busyDelAud"
+                        style="display: none"
+                      ></span>
+                      Remove
+                    </button>
+                  {{end}}
+                </div>
+              </div>
+            </div>
           </div>
         </fieldset>
         <div class="flex gap-2">
@@ -304,6 +402,47 @@
         </div>
       </div>
     </form>
+
+  {{/* Live camera overlay (desktop); camera.js drives it and falls back
+       to the capture input on phones. Its #camera-video preview is
+       mirrored like a selfie, matching the snap. */}}
+  <div
+    id="camera-modal"
+    class="fixed inset-0 z-50 hidden items-center justify-center
+           bg-ink/70 p-4"
+    style="display: none"
+  >
+    <div class="box bg-cream p-4 w-full max-w-sm flex flex-col gap-3">
+      <div class="flex items-center justify-between font-bold">
+        Camera
+        <button
+          class="btn bg-white min-h-9 px-3"
+          data-camera-close
+          type="button"
+        >Close</button>
+      </div>
+      <video
+        id="camera-video"
+        class="rounded-xl border-2 border-ink w-full aspect-video
+               object-cover -scale-x-100 bg-ink/10"
+        autoplay
+        muted
+        playsinline
+      ></video>
+      <div class="flex gap-2">
+        <button
+          class="btn-sun flex-1 min-h-11"
+          data-camera-snap
+          type="button"
+        >Snap photo</button>
+        <button
+          class="btn bg-white min-h-11"
+          data-camera-close
+          type="button"
+        >Cancel</button>
+      </div>
+    </div>
+  </div>
 
     {{/* Live preview beside the form on large screens. */}}
     <div class="mt-6 lg:mt-0">

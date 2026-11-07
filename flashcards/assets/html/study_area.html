@@ -18,7 +18,8 @@
               <select
                 class="btn h-11 appearance-none pl-4 pr-9 bg-white"
                 data-bind="category"
-                data-on:change="$revealed = false; $reviewed = 0; @get('/')"
+                data-on:change="$revealed = false; $idx = 0; $reviewed = 0;
+                @get('/')"
               >
                 <option value="">All Categories</option>
                 {{$sel := .Category}}
@@ -38,7 +39,8 @@
                 {{if .HideMastered}}checked{{end}}
                 class="cursor-pointer"
                 data-bind="hideMastered"
-                data-on:change="$revealed = false; $reviewed = 0; @get('/')"
+                data-on:change="$revealed = false; $idx = 0; $reviewed = 0;
+                @get('/')"
                 type="checkbox"
               >
               Hide mastered
@@ -116,7 +118,7 @@
           >← Previous</button>
           <span
             class="text-xs"
-            data-text="'Card ' + ($reviewed + 1) + ' of ' + $passTotal"
+            data-text="'Card ' + ($reviewed + $idx + 1) + ' of ' + $passTotal"
           >Card {{add .Idx 1}} of {{.Count}}</span>
           <button
             class="btn bg-white hover:bg-sun

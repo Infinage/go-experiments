@@ -119,6 +119,67 @@ func TestRequeueLeakStops(t *testing.T) {
 	}
 }
 
+// TestGradeKeepsIndexSoNextCardSlidesIn guards the paging signals: a
+// grade must not reset idx, so the successor of the graded card slides
+// into its slot and the counter (reviewed + idx + 1) keeps counting up.
+func TestGradeKeepsIndexSoNextCardSlidesIn(t *testing.T) {
+	h, db := realHandler(t)
+	db.CreateCard("q2", "a2", "web")
+	db.CreateCard("q3", "a3", "web")
+	// Card 1 graded at idx 1 (the user paged once before grading):
+	// idx must stay 1 and the card now at idx 1 must be q3.
+	rec := gradePost(t, h, 1, `{"grade": "easy", "gradedIds": [1],
+    "reviewed": 1, "idx": 1}`)
+	if rec.Code != 200 {
+		t.Fatalf("grade: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), ">q3<") {
+		t.Fatalf("card after grading at idx 1 is not q3: %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"idx": 0`) {
+		t.Fatalf("grade reset idx to 0: %s", rec.Body.String())
+	}
+}
+
+// TestGradeLastCardClampsIdx guards the end-of-queue case: after the
+// last remaining card is graded the queue shrinks past the client's
+// idx, so the grade response must echo the server-clamped idx back —
+// otherwise the counter runs past passTotal ("Card 4 of 3") and Prev
+// re-serves the just-shown card.
+func TestGradeLastCardClampsIdx(t *testing.T) {
+	h, db := realHandler(t)
+	db.CreateCard("q2", "a2", "web")
+	// Two cards, user pages to idx 1 (card 2) and grades it: the queue
+	// then holds only q2 at idx 0, so the response must carry "idx": 0.
+	rec := gradePost(t, h, 2, `{"grade": "easy", "gradedIds": [2],
+    "reviewed": 1, "idx": 1}`)
+	if rec.Code != 200 {
+		t.Fatalf("grade: %d %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"idx": 0`) {
+		t.Fatalf("grade did not clamp idx to 0: %s", body)
+	}
+	if !strings.Contains(body, `"passTotal": 2`) {
+		t.Fatalf("passTotal diverged after end-of-queue grade: %s", body)
+	}
+}
+
+// TestShuffleShortQueueNotPanic covers a stale requeuedIds list longer
+// than the (filtered) queue: shuffling must clamp instead of slicing
+// out of bounds.
+func TestShuffleShortQueueNotPanic(t *testing.T) {
+	h, db := realHandler(t)
+	db.CreateCard("q2", "a2", "web")
+	// requeuedIds longer than the 1-card queue, on a filtered queue.
+	rec := studyGet(t, h, `{"shuffleSeed": 7, "requeuedIds": [1, 2, 3, 4],
+    "category": "web"}`)
+	if rec.Code != 200 {
+		t.Fatalf("studyGet with long requeuedIds: %d %s",
+			rec.Code, rec.Body.String())
+	}
+}
+
 // TestCaughtUpTotalNotZero covers the "Card N of 0" bug: after a reset
 // performed while a caught-up page had seeded passTotal=0, the reset
 // response must re-patch passTotal to the fresh queue count.

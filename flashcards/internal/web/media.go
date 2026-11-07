@@ -96,7 +96,11 @@ func (s *Server) resetCardStatus(w http.ResponseWriter, r *http.Request) {
 	line := dueLine(srs.State{}, false)
 	frag := s.templateHTML("card-status", cardStatusData{Line: line, ID: id})
 	sse := datastar.NewSSE(w, r)
-	if err := sse.PatchSignals([]byte(`{"busyResetStatus": false}`)); err != nil {
+	// Patch the line's signal as well: the span is bound with data-text
+	// ($statusLine), so a bare element patch would be overwritten by the
+	// stale signal value right after the swap.
+	if err := sse.PatchSignals([]byte(`{"busyResetStatus": false, "statusLine": ` +
+		statusLineJSON(line) + `}`)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -122,6 +126,7 @@ var sniffed = map[string]string{
 	"audio/mp4":  ".m4a",
 	"audio/wav":  ".wav",
 	"audio/ogg":  ".ogg",
+	"audio/webm": ".webm",
 }
 
 // readUpload validates a multipart file field and returns its bytes and
@@ -206,6 +211,10 @@ func sniffAudio(b []byte) string {
 		return "audio/wav"
 	case bytes.HasPrefix(b, []byte("OggS")):
 		return "audio/ogg"
+		// Matroska container: MediaRecorder's default (Chrome and friends
+		// emit WebM opus).
+	case bytes.HasPrefix(b, []byte{0x1A, 0x45, 0xDF, 0xA3}):
+		return "audio/webm"
 	}
 	return ""
 }
