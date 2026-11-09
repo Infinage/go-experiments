@@ -32,16 +32,28 @@
   <div
     class="lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8 lg:items-start"
     data-computed:any-busy="!!($busyDelImg || $busyDelAud || $busyResetStatus)"
+    {{/* Picked-media preview: a freshly picked file lives in $imgData/
+         $audData (base64 from the file binding, set on change by upload,
+         camera and recorder alike) and previews as a data: URL; an
+         already-saved card keeps its existing $imgUrl/$audUrl. */}}
+    data-computed:img-prev="($imgPick && $imgData?.length
+      && 'data:' + $imgData[0].mime + ';base64,' + $imgData[0].contents)
+      || $imgUrl"
+    data-computed:aud-prev="($audPick && $audData?.length
+      && 'data:' + $audData[0].mime + ';base64,' + $audData[0].contents)
+      || $audUrl"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
-      'imgName': '', 'audName': '',
       'mediaKind': {{toSignal .MediaKind}},
       'delKind': '', 'revealed': false,
+      'imgData': [], 'audData': [],
+      'imgPick': '', 'audPick': '',
       'imgUrl': {{existingMediaURL .Card "image"}},
       'audUrl': {{existingMediaURL .Card "audio"}},
       'statusLine': {{toSignal .StatusLine}}}"
   >
-    {{/* GET-only (Android asset bridge): save goes through datastar signals;
-         media files arrive as base64 via window.formMedia (formmedia.js). */}}
+    {{/* GET-only (Android asset bridge): save goes through datastar
+         signals; file inputs are data-bound, so picked media arrives as
+         base64 in the signals. */}}
     <div>
       <input data-bind="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
       {{with .Error}}
@@ -97,8 +109,8 @@
               class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== '',
                 'bg-pink': $mediaKind === ''}"
-              data-on:click="$mediaKind = ''; $imgUrl = ''; $imgName = '';
-                $audUrl = ''; $audName = ''"
+              data-on:click="$mediaKind = ''; $imgUrl = ''; $imgPick = '';
+                $audUrl = ''; $audPick = ''"
               type="button"
             >None</button>
             <button
@@ -106,7 +118,7 @@
               data-class="{'bg-white': $mediaKind !== 'image',
                 'bg-pink': $mediaKind === 'image'}"
               data-on:click="$mediaKind = 'image'; $audUrl = '';
-                $audName = ''"
+                $audPick = ''"
               type="button"
             >
               <svg class="size-4" viewBox="0 0 24 24" fill="none"
@@ -123,7 +135,7 @@
               data-class="{'bg-white': $mediaKind !== 'audio',
                 'bg-pink': $mediaKind === 'audio'}"
               data-on:click="$mediaKind = 'audio'; $imgUrl = '';
-                $imgName = ''"
+                $imgPick = ''"
               type="button"
             >
               <svg class="size-4" viewBox="0 0 24 24" fill="none"
@@ -143,7 +155,7 @@
             data-show="$mediaKind === 'image'"
             style="display: none"
           >
-            <div class="flex flex-wrap items-center gap-2" data-show="!$imgUrl">
+            <div class="flex flex-wrap items-center gap-2" data-show="!$imgPrev">
               <button
                 class="btn-sun min-h-9 px-3"
                 data-on:click="var i = document.querySelector(
@@ -177,7 +189,7 @@
             <div
               class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
                      text-center text-xs text-ink/60"
-              data-show="!$imgUrl"
+              data-show="!$imgPrev"
             >
               <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2"
@@ -188,16 +200,16 @@
               <b class="text-ink">Add a picture to the front</b><br>
               Browse or drop an image — or snap one with the camera
             </div>
-            <div class="flex items-center gap-3" data-show="$imgUrl">
+            <div class="flex items-center gap-3" data-show="$imgPrev">
               <img
                 class="size-20 rounded-xl border-2 border-ink object-cover"
                 alt="Chosen front image"
-                data-attr:src="$imgUrl"
+                data-attr:src="$imgPrev"
               >
               <div class="flex min-w-0 flex-col gap-1">
                 <span
                   class="truncate text-xs font-semibold"
-                  data-text="$imgName || 'Current image'"
+                  data-text="$imgData[0]?.name || 'Current image'"
                 ></span>
                 <div class="flex gap-2">
                   <button
@@ -209,8 +221,8 @@
                   <button
                     class="btn bg-white min-h-9 px-3"
                     data-on:click="document.querySelector('[name=front_image]').
-                      value = ''; $imgUrl = ''; $imgName = ''"
-                    data-show="$imgName"
+                      value = ''; $imgPick = ''"
+                    data-show="$imgPick"
                     style="display: none"
                     type="button"
                   >Remove</button>
@@ -220,9 +232,9 @@
                       data-attr:disabled="$anyBusy"
                       data-indicator:busy-del-img
                       data-on:click="$delKind = 'image'; $mediaKind = '';
-                        $imgUrl = ''; $imgName = '';
+                        $imgUrl = ''; $imgPick = '';
                         @get('/cards/{{.Card.ID}}/media/delete')"
-                      data-show="$imgUrl && !$imgName"
+                      data-show="$imgPrev && !$imgPick"
                       style="display: none"
                       type="button"
                     >
@@ -244,8 +256,6 @@
               class="sr-only"
               accept="image/png,image/jpeg,image/webp,image/gif"
               data-bind="imgData"
-              data-on:change="$imgName = ($imgData?.length && $imgData[0].name)
-                || ($imgUrl && $imgName) || ''"
               name="front_image"
               type="file"
             >
@@ -255,10 +265,14 @@
               accept="image/*"
               capture="environment"
               data-bind="imgData"
-              data-on:change="$imgName = ($imgData?.length && $imgData[0].name)
-                || ($imgUrl && $imgName) || ''"
               name="front_image_camera"
               type="file"
+            >
+            {{/* mediapick.js watches the file inputs above and mirrors the
+                 picked file name into this bound partner, updating the
+                 $imgPick gate through the regular binding path. */}}
+            <input class="sr-only" data-bind="imgPick"
+              id="front_image_pick" type="text"
             >
           </div>
 
@@ -274,14 +288,15 @@
               name="front_audio"
               accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
               data-bind="audData"
-              data-on:change="$audName = ($audData?.length && $audData[0].name)
-                || ($audUrl && $audName) || ''"
               type="file"
+            >
+            <input class="sr-only" data-bind="audPick"
+              id="front_audio_pick" type="text"
             >
             <div
               class="flex flex-wrap items-center gap-2"
               data-record-hide
-              data-show="!$audUrl"
+              data-show="!$audPrev"
             >
               <button
                 class="btn-sun min-h-9 px-3"
@@ -332,7 +347,7 @@
               class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
                      text-center text-xs text-ink/60"
               data-record-hide
-              data-show="!$audUrl"
+              data-show="!$audPrev"
             >
               <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2"
@@ -343,7 +358,7 @@
               <b class="text-ink">Add audio to the front</b><br>
               Upload a clip or record straight from here
             </div>
-            <div class="flex items-center gap-3" data-show="$audUrl">
+            <div class="flex items-center gap-3" data-show="$audPrev">
               <span
                 class="inline-flex size-9 items-center justify-center bg-sun
                        border-2 border-ink rounded-full"
@@ -358,8 +373,14 @@
               <div class="flex min-w-0 flex-col gap-1">
                 <span
                   class="truncate text-xs font-semibold"
-                  data-text="$audName || 'Current audio'"
+                  data-text="$audData[0]?.name || 'Current audio'"
                 ></span>
+                <audio
+                  class="w-56 max-w-full"
+                  controls
+                  preload="metadata"
+                  data-attr:src="$audPrev"
+                ></audio>
                 <div class="flex gap-2">
                   <button
                     class="btn-sun min-h-9 px-3"
@@ -370,8 +391,8 @@
                   <button
                     class="btn bg-white min-h-9 px-3"
                     data-on:click="document.querySelector('[name=front_audio]').
-                      value = ''; $audUrl = ''; $audName = ''"
-                    data-show="$audName"
+                      value = ''; $audPick = ''"
+                    data-show="$audPick"
                     style="display: none"
                     type="button"
                   >Remove</button>
@@ -381,9 +402,9 @@
                       data-attr:disabled="$anyBusy"
                       data-indicator:busy-del-aud
                       data-on:click="$delKind = 'audio'; $mediaKind = '';
-                        $audUrl = ''; $audName = '';
+                        $audUrl = ''; $audPick = '';
                         @get('/cards/{{.Card.ID}}/media/delete')"
-                      data-show="$audUrl && !$audName"
+                      data-show="$audPrev && !$audPick"
                       style="display: none"
                       type="button"
                     >

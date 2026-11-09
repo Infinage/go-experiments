@@ -38,6 +38,10 @@ func sigSave(h http.Handler, fields map[string]string, files map[string][]byte) 
 			Name:     "upload",
 			Contents: base64.StdEncoding.EncodeToString(data),
 		}}
+		// The pick opt-in gate: a file bulk only applies when the
+		// corresponding pick-string signal is set (client-side
+		// $imgPick / $audPick).
+		sig[strings.TrimSuffix(k, "Data")+"Pick"] = "upload"
 	}
 	raw, err := json.Marshal(sig)
 	if err != nil {
@@ -117,6 +121,29 @@ func TestUploadRejectsBadContent(t *testing.T) {
 	}, map[string][]byte{"imgData": big})
 	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "limit") {
 		t.Errorf("oversize: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// A pick-less bulk is ignored: image without the imgPick opt-in —
+	// save succeeds but nothing is attached.
+	sig := map[string]any{
+		"front": "q", "back": "a",
+		"imgData": []fileSignal{{
+			Name:     "upload",
+			Contents: base64.StdEncoding.EncodeToString(pngBytes(t)),
+		}},
+	}
+	raw, err := json.Marshal(sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/cards/save", nil)
+	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(string(raw))
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req)
+	if rec2.Code != 200 {
+		t.Fatalf("pick-less save: %d %s", rec2.Code, rec2.Body.String())
+		_ = err
 	}
 }
 

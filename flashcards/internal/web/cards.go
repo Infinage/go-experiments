@@ -198,6 +198,23 @@ type saveSignals struct {
 	MediaKind string       `json:"mediaKind"`
 	ImgData   []fileSignal `json:"imgData"`
 	AudData   []fileSignal `json:"audData"`
+	// ImgPick/AudPick carry the name of the file the user picked via
+	// upload / camera / recorder. They act as opt-ins: a signal bulk is
+	// only attached when its pick string is set, so switching the media
+	// kind or pressing Remove can reliably drop a picked file without
+	// having to clear the (file-bound, array-typed) data signal client
+	// side — datastar can't assign a fresh empty array from a template
+	// expression.
+	ImgPick string `json:"imgPick"`
+	AudPick string `json:"audPick"`
+}
+
+// picked filters the file array by its pick opt-in.
+func picked(files []fileSignal, pickName string) []fileSignal {
+	if pickName == "" {
+		return nil
+	}
+	return files
 }
 
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
@@ -266,11 +283,13 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 // enforcing image-XOR-audio: a card may carry an image or audio, never
 // both. mediaKind drives the cleanup of the unselected type.
 func (s *Server) saveMediaSignals(sig saveSignals, id int64) error {
-	image, err := mediaFromSignals(sig.ImgData, "image", maxImageBytes)
+	image, err := mediaFromSignals(picked(sig.ImgData, sig.ImgPick),
+		"image", maxImageBytes)
 	if err != nil {
 		return err
 	}
-	audio, err := mediaFromSignals(sig.AudData, "audio", maxAudioBytes)
+	audio, err := mediaFromSignals(picked(sig.AudData, sig.AudPick),
+		"audio", maxAudioBytes)
 	if err != nil {
 		return err
 	}
