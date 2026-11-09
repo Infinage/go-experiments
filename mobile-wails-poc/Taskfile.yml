@@ -1,0 +1,56 @@
+version: '3'
+
+vars:
+  APP_NAME: "mobile-wails-poc"
+  APP_ID: "com.wails.app"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: "npm" # labels only; frontend build is a no-op (Go-embedded assets)
+
+includes:
+  common: ./build/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+  android: ./build/android/Taskfile.yml
+
+tasks:
+  # ---------- desktop sanity build ----------
+  desktop:build:
+    summary: Build the Linux desktop binary (sanity check for Go code + assets)
+    cmds:
+      - task: linux:build
+
+  desktop:run:
+    summary: Build and run the Linux desktop app
+    cmds:
+      - task: linux:run
+
+  # ---------- android (thin wrappers; android:* tasks come from build/android) ----------
+  apk:build:
+    summary: Build the Android debug APK (libwails.so + gradle assembleDebug)
+    cmds:
+      # Physical device target (CPH2223, arm64-v8a); the default is the host arch for emulators
+      - task: android:build
+        vars:
+          ARCH: arm64
+      - task: android:assemble:apk
+
+  apk:run:device:
+    summary: Install + launch the debug APK on the connected device (DEVICE_ID=<serial> to pick one)
+    deps:
+      - task: android:build
+    cmds:
+      - adb ${DEVICE_ID:+-s $DEVICE_ID} uninstall {{.APP_ID}} 2>/dev/null || true
+      - adb ${DEVICE_ID:+-s $DEVICE_ID} install {{.BIN_DIR}}/{{.APP_NAME}}.apk
+      - adb ${DEVICE_ID:+-s $DEVICE_ID} shell am start -n {{.APP_ID}}/com.wails.app.MainActivity
+
+  apk:logs:
+    summary: Stream logcat from the device filtered to Wails output
+    cmds:
+      - task: android:logs
+
+  clean:
+    summary: Remove build artifacts
+    cmds:
+      - rm -rf {{.BIN_DIR}}
+      - rm -rf build/android/app/build
+      - rm -rf build/android/app/src/main/jniLibs/*/libwails.so
+      - rm -rf build/android/.gradle
