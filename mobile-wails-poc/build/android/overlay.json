@@ -1,5 +1,0 @@
-{
-  "Replace": {
-    "/mnt/personal/projects/go-experiments/mobile-wails-poc/main_android.gen.go": "/mnt/personal/projects/go-experiments/mobile-wails-poc/build/android/gen/main_android.gen.go"
-  }
-}
