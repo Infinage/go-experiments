@@ -147,6 +147,42 @@ func TestUploadRejectsBadContent(t *testing.T) {
 	}
 }
 
+// A never-picked bound file input ships [""] (datastar's empty-value
+// initialisation); the save must ignore it instead of failing decode.
+func TestSaveSignalsEmptyFileArray(t *testing.T) {
+	h, db := realHandler(t)
+	raw, err := json.Marshal(map[string]any{
+		"front": "q", "back": "a",
+		"imgData": []string{""},
+		"audData": []string{""},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/cards/save", nil)
+	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(string(raw))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("empty-array save: %d %s", rec.Code, rec.Body.String())
+	}
+	cards, err := db.Cards("", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cards {
+		if c.Front != "q" {
+			continue
+		}
+		if c.HasImage || c.HasAudio {
+			t.Fatalf("empty-array save attached media: %+v", c)
+		}
+		return
+	}
+	t.Fatalf("empty-array save did not store the card: %+v", cards)
+}
+
 func TestMediaMissing(t *testing.T) {
 	h, _ := realHandler(t)
 	if rec := get(h, "/cards/9999/media/image"); rec.Code != 404 {

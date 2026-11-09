@@ -1,7 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -187,17 +189,44 @@ type fileSignal struct {
 	Mime     string `json:"mime"`
 }
 
+// fileList decodes a data-bind file-input signal leniently: datastar
+// initializes a never-picked bound file input to [""] (its empty
+// input.value), which strict []fileSignal decoding rejects — every
+// text-only save would 400. Object entries decode normally; anything
+// else ("", null, numbers) is ignored.
+type fileList []fileSignal
+
+func (f *fileList) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make([]fileSignal, 0, len(raw))
+	for _, r := range raw {
+		if !bytes.HasPrefix(bytes.TrimSpace(r), []byte("{")) {
+			continue
+		}
+		var file fileSignal
+		if err := json.Unmarshal(r, &file); err != nil {
+			return err
+		}
+		out = append(out, file)
+	}
+	*f = out
+	return nil
+}
+
 // saveSignals holds the card-form save, submitted via datastar GET
 // (signals on the query string — the Android webview asset bridge rejects
 // request bodies). Media arrives as base64 arrays from data-bind.
 type saveSignals struct {
-	ID        any          `json:"id"` // bind on a hidden input yields a string
-	Front     string       `json:"front"`
-	Back      string       `json:"back"`
-	Category  string       `json:"category"`
-	MediaKind string       `json:"mediaKind"`
-	ImgData   []fileSignal `json:"imgData"`
-	AudData   []fileSignal `json:"audData"`
+	ID        any      `json:"id"` // bind on a hidden input yields a string
+	Front     string   `json:"front"`
+	Back      string   `json:"back"`
+	Category  string   `json:"category"`
+	MediaKind string   `json:"mediaKind"`
+	ImgData   fileList `json:"imgData"`
+	AudData   fileList `json:"audData"`
 	// ImgPick/AudPick carry the name of the file the user picked via
 	// upload / camera / recorder. They act as opt-ins: a signal bulk is
 	// only attached when its pick string is set, so switching the media
@@ -210,7 +239,7 @@ type saveSignals struct {
 }
 
 // picked filters the file array by its pick opt-in.
-func picked(files []fileSignal, pickName string) []fileSignal {
+func picked(files fileList, pickName string) fileList {
 	if pickName == "" {
 		return nil
 	}
@@ -269,11 +298,12 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isDatastarRequest(r) {
-		// Datastar GET: respond with a redirect-style round-trip by patching
-		// the cards list shell? The page navigates client-side on datastar,
-		// so just confirm and let the client follow its own redirect.
-		w.Header().Set("X-Flashcards-Saved", strconv.FormatInt(id, 10))
-		w.WriteHeader(http.StatusOK)
+		// Datastar GET: the fetch plugin executes any text/javascript
+		// response (datastar.js treats it as a scripted result), so answer
+		// with a client navigation to the cards list — the plain-HTTP path
+		// below keeps the classic 303 redirect.
+		w.Header().Set("Content-Type", "text/javascript")
+		_, _ = w.Write([]byte("location.href = '/cards'"))
 		return
 	}
 	http.Redirect(w, r, "/cards", http.StatusSeeOther)
@@ -325,7 +355,7 @@ func (s *Server) saveMediaSignals(sig saveSignals, id int64) error {
 // mediaFromSignals turns the picked files from a data/bind file input
 // (datastar ships {name, contents base64, mime}) into store.Media with a
 // size cap, sniffing the real content type.
-func mediaFromSignals(files []fileSignal, kind string, limit int) (store.Media, error) {
+func mediaFromSignals(files fileList, kind string, limit int) (store.Media, error) {
 	if len(files) == 0 || files[0].Contents == "" {
 		return store.Media{}, nil
 	}
