@@ -16,6 +16,7 @@ import (
 type Server struct {
 	store *store.Store
 	tmpl  *template.Template
+	stage *staging
 }
 
 // New builds the HTTP handler. assets must contain html/, css/ and js/.
@@ -115,7 +116,8 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{store: db, tmpl: tmpl}
+	s := &Server{store: db, tmpl: tmpl, stage: newStaging()}
+	s.stage.init()
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
@@ -133,6 +135,8 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 	mux.HandleFunc("GET /cards/new", s.newCard)
 	mux.HandleFunc("GET /cards/save", s.saveCard)
 	mux.HandleFunc("GET /cards/{id}/edit", s.editCard)
+	mux.HandleFunc("POST /cards/media/stage", s.stageMedia)
+	mux.HandleFunc("GET /cards/media/tmp/{token}", s.serveStaged)
 	mux.HandleFunc("GET /cards/{id}/media/{kind}", s.cardMedia)
 	mux.HandleFunc("GET /cards/{id}/media/delete", s.deleteMedia)
 	mux.HandleFunc("GET /cards/{id}/status/reset", s.resetCardStatus)

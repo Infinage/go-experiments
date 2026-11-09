@@ -30,6 +30,11 @@ type Category struct {
 	Count int
 }
 
+// NoneFilter is the sentinel category value that selects cards
+// without a category ("tags IS EMPTY"). Reserved by the save rule, so
+// it can never collide with a real category name.
+const NoneFilter = "__none__"
+
 func (c *Card) scanFrom(row interface{ Scan(...any) error }) error {
 	// HasImage/HasAudio come from "col IS NOT NULL" expressions, which
 	// scan directly into bools (never NULL themselves).
@@ -72,6 +77,10 @@ func (s *Store) Card(id int64) (Card, error) {
 // review status.
 func (s *Store) Cards(q, category, media string) ([]Card, error) {
 	where, args := []string{"1=1"}, []any{}
+	catExpr, catArg := "category = ?", category
+	if category == NoneFilter {
+		catExpr, catArg = "IFNULL(category,'') = ''", ""
+	}
 	if q != "" {
 		// Match front/back text and category ("tag") names.
 		where = append(where,
@@ -80,8 +89,8 @@ func (s *Store) Cards(q, category, media string) ([]Card, error) {
 		args = append(args, pat, pat, pat)
 	}
 	if category != "" {
-		where = append(where, "category = ?")
-		args = append(args, category)
+		where = append(where, catExpr)
+		args = append(args, catArg)
 	}
 	switch media {
 	case "text":
@@ -186,6 +195,42 @@ func (s *Store) deleteCards(ids []int64) error {
 
 // Categories returns distinct categories with card counts, alphabetically.
 // The "" category (uncategorised) is excluded.
+// Categories returns distinct categories with card counts, alphabetically.
+// The "" category (uncategorised) is excluded.
+// UntaggedCount returns the number of cards without a category.
+func (s *Store) UntaggedCount() (int, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM cards WHERE IFNULL(category,'') = ''`).Scan(&n)
+	return n, err
+}
+
+// CategoryPending counts the cards still pending review per category,
+// grouped by IFNULL(category,”) — the "" group is the untagged cards.
+// Pending mirrors the study queue predicate: never reviewed, or due
+// right now (mastered cards count once they come due again).
+func (s *Store) CategoryPending() ([]Category, error) {
+	rows, err := s.db.Query(`SELECT IFNULL(category,''), COUNT(*)
+		FROM cards c
+		LEFT JOIN review_state rs ON rs.card_id = c.id
+		WHERE rs.card_id IS NULL
+			OR rs.due_at <= strftime('%Y-%m-%dT%H:%M:%fZ','now')
+		GROUP BY IFNULL(category,'') ORDER BY IFNULL(category,'')`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Category
+	for rows.Next() {
+		var c Category
+		if err := rows.Scan(&c.Name, &c.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Categories() ([]Category, error) {
 	rows, err := s.db.Query(
 		`SELECT category, COUNT(*) FROM cards WHERE IFNULL(category,'') <> '' GROUP BY category ORDER BY category`)

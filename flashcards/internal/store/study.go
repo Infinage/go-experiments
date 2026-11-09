@@ -197,8 +197,12 @@ func (s *Store) ResetProgress(category string) error {
 		_, err := s.db.Exec(`DELETE FROM review_state`)
 		return err
 	}
+	catExpr, catArg := "category = ?", category
+	if category == NoneFilter {
+		catExpr, catArg = "IFNULL(category,'') = ''", ""
+	}
 	_, err := s.db.Exec(`DELETE FROM review_state WHERE card_id IN
-		(SELECT id FROM cards WHERE category = ?)`, category)
+		(SELECT id FROM cards WHERE `+catExpr+`)`, catArg)
 	return err
 }
 

@@ -112,3 +112,45 @@ func TestEditMissingCard404(t *testing.T) {
 		t.Fatalf("got %d", rec.Code)
 	}
 }
+
+// The tag name "None" is reserved for the untagged pseudo-category;
+// the save endpoint rejects it case-insensitively with a toast payload.
+func TestSaveRejectsNoneTag(t *testing.T) {
+	h, _ := realHandler(t)
+	for _, name := range []string{"none", "None", "NONE"} {
+		rec := sigGet(h, "/cards/save",
+			`{"front": "Q", "back": "A", "category": "`+name+`"}`)
+		// The datastar path answers 200 with a toast(...) script,
+		// mirroring the other save failures.
+		if rec.Code != 200 || strings.Count(rec.Body.String(), "toast") == 0 {
+			t.Fatalf("save category %q: code %d body %s",
+				name, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "reserved") {
+			t.Fatalf("save category %q: body %s", name, rec.Body.String())
+		}
+	}
+	// A differently-cased reserved match must not leak into the DB.
+	near := sigGet(h, "/cards/save",
+		`{"front": "Q", "back": "A", "category": "NoneXYZ"}`)
+	if near.Code != 200 {
+		t.Fatalf("near-miss rejected: %d", near.Code)
+	}
+}
+
+// The *None* pseudo-category is a first-class filter and study target:
+// cards list sentinel passthrough and account for untagged counts.
+func TestCardsNoneFilter(t *testing.T) {
+	h, db := realHandler(t)
+	if _, err := db.CreateCard("untagged", "a", ""); err != nil {
+		t.Fatal(err)
+	}
+	rec := sigGet(h, "/cards", `{"category": "__none__"}`)
+	if rec.Code != 200 {
+		t.Fatalf("cards with None filter: %d", rec.Code)
+	}
+	// The rendered fragment lines up the untagged card, not nothing.
+	if !strings.Contains(rec.Body.String(), "untagged") {
+		t.Fatalf("none-filtered list missing card: %s", rec.Body.String())
+	}
+}

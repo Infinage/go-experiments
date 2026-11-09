@@ -48,6 +48,7 @@
   }
 
   const pending = new Set(); // start() awaiting getUserMedia
+  let live = null; // active recording {input}, the WeakMap can't be iterated
 
   function start(btn) {
     const input = document.querySelector(btn.dataset.recordTarget);
@@ -56,8 +57,10 @@
       return; // already recording (or starting) via another button
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      btn.textContent = "Mic unavailable";
-      btn.disabled = true;
+      // Insecure context (plain http:// on anything but localhost) or an
+      // ancient browser. Keep the button enabled so a retry after fixing
+      // the origin works without a reload.
+      btn.textContent = "Mic needs localhost or HTTPS";
       return;
     }
     pending.add(input);
@@ -73,6 +76,7 @@
         recordingUI(input, state.get(input), false);
         const st = state.get(input);
         state.delete(input);
+        if (live?.input === input) live = null;
         media.getTracks().forEach((t) => t.stop());
         if (st?.cancelled) return;
         const blob = new Blob(chunks, {type: recorder.mimeType});
@@ -80,13 +84,30 @@
       });
       recorder.start();
       state.set(input, {recorder, chunks, stream: media, cancelled: false});
+      live = {input};
       recordingUI(input, state.get(input), true);
-    }).catch(() => {
+    }).catch((err) => {
       pending.delete(input);
-      btn.textContent = "Mic unavailable";
-      btn.disabled = true;
+      // Surface WHY the mic refused so mobile failures are diagnosable
+      // from the button itself; leave it enabled to allow a quick retry.
+      btn.textContent =
+        err?.name === "NotAllowedError" ? "Mic blocked — allow in site settings"
+        : err?.name === "NotReadableError" ? "Mic busy — close other apps"
+        : err?.name === "NotFoundError" ? "No microphone found"
+        : "Mic unavailable";
     });
   }
+
+  // Media-kind switches (None/Image/Audio buttons) must kill any live
+  // recording, same as the cancel button does.
+  window.stopActiveRecording = function () {
+    const input = live?.input;
+    const st = input ? state.get(input) : null;
+    if (st) {
+      st.cancelled = true;
+      st.recorder.stop();
+    }
+  };
 
   document.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-record-target]");
@@ -103,7 +124,8 @@
     if (cancel) {
       // Cancel whichever recording is active (the cancel button is not
       // tied to a specific input), instead of hardcoding one target.
-      const st = [...state.values()][0];
+      const input = live?.input;
+      const st = input ? state.get(input) : null;
       if (st) {
         st.cancelled = true;
         st.recorder.stop();

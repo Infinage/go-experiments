@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"hash/fnv"
 	"net/http"
 	"sort"
@@ -70,6 +71,13 @@ type studyData struct {
 	Categories   []store.Category
 	Decks        []store.CategoryProgress
 	Force        bool
+	// CatPendingJSON is the live per-category pending-review counts
+	// the dropdown options render alongside their names; categories
+	// missing from the map (or zero) display "-".
+	CatPendingJSON string
+	// NonePending is the pending-review count of the untagged cards,
+	// for the dropdown's *None* pseudo-row's initial render.
+	NonePending int
 	// Idx/Count locate the current card in the queue.
 	Idx, Count int
 }
@@ -89,6 +97,10 @@ func (s *Server) studyPage(w http.ResponseWriter, r *http.Request) {
 		// Toggle or refresh: patch just the study area, and clear any
 		// busy signal left by the replaced triggering button.
 		sse := datastar.NewSSE(w, r)
+		if err := sse.PatchSignals(pendingSignals(d)); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		if err := sse.PatchSignals(busyResetSignals()); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -139,6 +151,10 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 	if err != nil {
 		return nil, err
 	}
+	pending, err := s.store.CategoryPending()
+	if err != nil {
+		return nil, err
+	}
 	decks, err := s.store.CategoryProgresses()
 	if err != nil {
 		return nil, err
@@ -150,8 +166,14 @@ func (s *Server) studyData(sig studySignals) (*studyData, error) {
 			NotStarted: d.NotStarted, MasteredPct: d.MasteredPct,
 			LearningPct: d.LearningPct, NotStartedPct: d.NotStartedPct}
 	}
+	catPending, nonePending := pendingMap(pending)
+	pendingBuf, err := json.Marshal(catPending)
+	if err != nil {
+		return nil, err
+	}
 	d := &studyData{Stats: stats, HideMastered: sig.HideMastered, DeckBar: bar,
 		Category: categoryIn(cats, sig.Category), Categories: cats,
+		CatPendingJSON: string(pendingBuf), NonePending: nonePending,
 		Idx: idx, Count: len(q), Decks: decks, Force: sig.Force}
 	if idx < len(q) {
 		d.Card = &q[idx]
@@ -185,6 +207,32 @@ func shuffle(q []store.StudyCard, seed int64) {
 	sort.Slice(q, func(i, j int) bool {
 		return keys[q[i].ID] < keys[q[j].ID]
 	})
+}
+
+// pendingMap splits CategoryPending rows into the signals map (named
+// categories keyed by name, untagged keyed by the NoneFilter sentinel)
+// and the untagged count for the template's initial None row. Zeros are
+// kept in the map — a tag that drops to zero must overwrite its stale
+// live count in the dropdown ("-" renders for falsy values).
+func pendingMap(pending []store.Category) (map[string]int, int) {
+	m := make(map[string]int, len(pending))
+	none := 0
+	for _, c := range pending {
+		if c.Name == "" {
+			none = c.Count
+			m[store.NoneFilter] = c.Count
+			continue
+		}
+		m[c.Name] = c.Count
+	}
+	return m, none
+}
+
+// pendingSignals patches the live dropdown counts; every category and
+// the untagged sentinel are present, so stale counts cannot survive a
+// grade or reset.
+func pendingSignals(d *studyData) []byte {
+	return []byte(`{"catPending": ` + d.CatPendingJSON + `}`)
 }
 
 // queue builds the pass queue: the due (or, when forced, all) cards
@@ -240,7 +288,9 @@ func (s *Server) queue(hideMastered bool, category string, force bool,
 			if !ok || droppedSet[id] {
 				continue
 			}
-			if category == "" || c.Category == category {
+			if category == "" ||
+				categoryIsNone(category) && c.Category == "" ||
+				c.Category == category {
 				q = append(q, c)
 			}
 		}
@@ -250,6 +300,12 @@ func (s *Server) queue(hideMastered bool, category string, force bool,
 	}
 	var out []store.StudyCard
 	for _, c := range q {
+		if categoryIsNone(category) {
+			if c.Category == "" {
+				out = append(out, c)
+			}
+			continue
+		}
 		if c.Category == category {
 			out = append(out, c)
 		}
@@ -257,9 +313,18 @@ func (s *Server) queue(hideMastered bool, category string, force bool,
 	return out, nil
 }
 
+// categoryIsNone reports whether category is the *None* pseudo-category
+// (untagged cards), selected via the reserved NoneFilter sentinel.
+func categoryIsNone(category string) bool {
+	return category == store.NoneFilter
+}
+
 // categoryIn passes the filter through only when it names a known
 // category, so a stale value doesn't silently filter everything out.
 func categoryIn(cats []store.Category, category string) string {
+	if categoryIsNone(category) {
+		return category
+	}
 	for _, c := range cats {
 		if c.Name == category {
 			return category
@@ -319,6 +384,10 @@ func (s *Server) gradeCard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := sse.PatchSignals(pendingSignals(d)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := sse.PatchSignals(busyResetSignals()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -352,6 +421,10 @@ func (s *Server) resetProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := sse.PatchSignals(passTotal(d, sig)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := sse.PatchSignals(pendingSignals(d)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

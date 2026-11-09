@@ -127,6 +127,8 @@ var sniffed = map[string]string{
 	"audio/wav":  ".wav",
 	"audio/ogg":  ".ogg",
 	"audio/webm": ".webm",
+	"audio/amr":  ".amr",
+	"audio/3gpp": ".3gp",
 }
 
 // readUpload validates a multipart file field and returns its bytes and
@@ -204,6 +206,13 @@ func sniffAudio(b []byte) string {
 	case bytes.HasPrefix(b, []byte("ID3")), bytes.HasPrefix(b, []byte("\xff\xfb")),
 		bytes.HasPrefix(b, []byte("\xff\xf3")):
 		return "audio/mpeg"
+	case bytes.HasPrefix(b, []byte("#!AMR")):
+		return "audio/amr"
+	case len(b) > 12 && bytes.Equal(b[4:8], []byte("ftyp")) &&
+		(len(b) > 16 && (bytes.HasPrefix(b[8:12], []byte("3gp")) ||
+			bytes.HasPrefix(b[8:12], []byte("3gr")))):
+		// 3GPP container (Android voice recorders emit these).
+		return "audio/3gpp"
 	case len(b) > 12 && bytes.Equal(b[4:8], []byte("ftyp")):
 		return "audio/mp4"
 	case bytes.HasPrefix(b, []byte("RIFF")) && len(b) > 12 &&
@@ -250,7 +259,10 @@ func (s *Server) cardMedia(w http.ResponseWriter, r *http.Request) {
 	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
 	w.Header().Set("Content-Type", m.Mime)
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// no-cache (not max-age): the same URL serves changed bytes after an
+	// in-place media replace, so the browser must revalidate every time
+	// and the ETag keeps unchanged blobs cheap (304).
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("Accept-Ranges", "bytes")
 
 	if match := r.Header.Get("If-None-Match"); match == etag {

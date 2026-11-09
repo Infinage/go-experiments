@@ -12,6 +12,7 @@
         <div
           class="box flex flex-wrap items-center justify-between gap-2 px-3.5
                  py-2.5 mb-3.5"
+          data-signals:cat-pending="{{.CatPendingJSON}}"
         >
           <div class="flex flex-wrap items-center gap-2">
             <div class="relative">
@@ -23,10 +24,14 @@
               >
                 <option value="">All Categories</option>
                 {{$sel := .Category}}
+                <option value="__none__"
+                  data-text="'None (' + ($catPending['__none__'] || '-') + ')'"
+                  {{if eq $sel "__none__"}}selected{{end}}
+                >None ({{.NonePending}})</option>
                 {{range .Categories}}
-                  <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}>
-                    {{.Name}}
-                  </option>
+                  <option value="{{.Name}}" {{if eq .Name $sel}}selected{{end}}
+                    data-text="'{{.Name}} (' + ($catPending['{{.Name}}'] || '-') + ')'"
+                  >{{.Name}}</option>
                 {{end}}
               </select>
               <span

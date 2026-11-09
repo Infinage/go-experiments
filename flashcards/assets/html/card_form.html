@@ -31,24 +31,32 @@
   {{$hasCard := .Card.ID}}
   <div
     class="lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8 lg:items-start"
-    data-computed:any-busy="!!($busyDelImg || $busyDelAud || $busyResetStatus)"
-    {{/* Picked-media preview: a freshly picked file lives in $imgData/
-         $audData (base64 from the file binding, set on change by upload,
-         camera and recorder alike) and previews as a data: URL; an
-         already-saved card keeps its existing $imgUrl/$audUrl. */}}
-    data-computed:img-prev="($imgPick && $imgData?.length
-      && 'data:' + $imgData[0].mime + ';base64,' + $imgData[0].contents)
-      || $imgUrl"
-    data-computed:aud-prev="($audPick && $audData?.length
-      && 'data:' + $audData[0].mime + ';base64,' + $audData[0].contents)
-      || $audUrl"
+    data-computed:any-busy="!!($busyDelImg || $busyDelAud ||
+      $busyResetStatus || $busySave || ($imgPick && !$imgStaged) ||
+      ($audPick && !$audStaged))"
+    {{/* Live card preview: $imgUrl/$audUrl are computed signals — a
+         freshly picked file (base64 from the file binding, set on change
+         by upload, camera and recorder alike) previews as a data: URL,
+         otherwise an already-saved card keeps its server URL. The flip
+         card reads these, so picked media plays before save. */}}
+    data-computed:img-url="($imgPick &&
+      ($imgStaged || ($imgPrev?.[0]
+        ? 'data:' + $imgPrev[0].mime + ';base64,' + $imgPrev[0].contents
+        : '')))
+      || $imgSaved"
+    data-computed:aud-url="($audPick &&
+      ($audStaged || ($audPrev?.[0]
+        ? 'data:' + $audPrev[0].mime + ';base64,' + $audPrev[0].contents
+        : '')))
+      || $audSaved"
     data-signals="{'front': {{toSignal .Front}}, 'back': {{toSignal .Back}},
       'mediaKind': {{toSignal .MediaKind}},
       'delKind': '', 'revealed': false,
-      'imgData': [], 'audData': [],
       'imgPick': '', 'audPick': '',
-      'imgUrl': {{existingMediaURL .Card "image"}},
-      'audUrl': {{existingMediaURL .Card "audio"}},
+      'imgStaged': '', 'audStaged': '',
+      'toast': '',
+      'imgSaved': {{existingMediaURL .Card "image"}},
+      'audSaved': {{existingMediaURL .Card "audio"}},
       'statusLine': {{toSignal .StatusLine}}}"
   >
     {{/* GET-only (Android asset bridge): save goes through datastar
@@ -88,6 +96,7 @@
           Category
           <input
             class="box px-3 h-11 bg-white outline-none font-normal"
+            data-bind="category"
             list="category-list"
             name="category"
             placeholder="e.g. web (optional)"
@@ -109,16 +118,19 @@
               class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== '',
                 'bg-pink': $mediaKind === ''}"
-              data-on:click="$mediaKind = ''; $imgUrl = ''; $imgPick = '';
-                $audUrl = ''; $audPick = ''"
+              data-on:click="stopActiveCamera?.(); stopActiveRecording?.();
+                $mediaKind = ''; $imgSaved = ''; $imgPick = '';
+                $imgStaged = ''; $audSaved = ''; $audPick = '';
+                $audStaged = ''"
               type="button"
             >None</button>
             <button
               class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== 'image',
                 'bg-pink': $mediaKind === 'image'}"
-              data-on:click="$mediaKind = 'image'; $audUrl = '';
-                $audPick = ''"
+              data-on:click="stopActiveCamera?.(); stopActiveRecording?.();
+                $mediaKind = 'image'; $audSaved = '';
+                $audPick = ''; $audStaged = ''"
               type="button"
             >
               <svg class="size-4" viewBox="0 0 24 24" fill="none"
@@ -134,8 +146,9 @@
               class="btn h-11 px-5"
               data-class="{'bg-white': $mediaKind !== 'audio',
                 'bg-pink': $mediaKind === 'audio'}"
-              data-on:click="$mediaKind = 'audio'; $imgUrl = '';
-                $imgPick = ''"
+              data-on:click="stopActiveCamera?.(); stopActiveRecording?.();
+                $mediaKind = 'audio'; $imgSaved = '';
+                $imgPick = ''; $imgStaged = ''"
               type="button"
             >
               <svg class="size-4" viewBox="0 0 24 24" fill="none"
@@ -155,7 +168,7 @@
             data-show="$mediaKind === 'image'"
             style="display: none"
           >
-            <div class="flex flex-wrap items-center gap-2" data-show="!$imgPrev">
+            <div class="flex flex-wrap items-center gap-2">
               <button
                 class="btn-sun min-h-9 px-3"
                 data-on:click="var i = document.querySelector(
@@ -186,76 +199,52 @@
               </button>
               <span class="text-xs text-ink/60">PNG/JPEG/WebP/GIF · max 5 MB</span>
             </div>
-            <div
-              class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
-                     text-center text-xs text-ink/60"
-              data-show="!$imgPrev"
-            >
-              <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true"
-              ><rect x="3" y="3" width="18" height="18" rx="2"/><circle
-                cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-              <b class="text-ink">Add a picture to the front</b><br>
-              Browse or drop an image — or snap one with the camera
-            </div>
-            <div class="flex items-center gap-3" data-show="$imgPrev">
-              <img
-                class="size-20 rounded-xl border-2 border-ink object-cover"
-                alt="Chosen front image"
-                data-attr:src="$imgPrev"
-              >
-              <div class="flex min-w-0 flex-col gap-1">
-                <span
-                  class="truncate text-xs font-semibold"
-                  data-text="$imgData[0]?.name || 'Current image'"
-                ></span>
-                <div class="flex gap-2">
-                  <button
-                    class="btn-sun min-h-9 px-3"
-                    data-on:click="var i = document.querySelector(
-                      '[name=front_image]'); i.value = ''; i.click();"
-                    type="button"
-                  >Replace</button>
-                  <button
-                    class="btn bg-white min-h-9 px-3"
-                    data-on:click="document.querySelector('[name=front_image]').
-                      value = ''; $imgPick = ''"
-                    data-show="$imgPick"
+            {{/* Panel-state row: clear an unsaved pick, or delete the
+                 already-saved image; the preview itself lives in the card
+                 flip in the sidebar. */}}
+            <div class="flex flex-wrap items-center gap-2">
+              {{if .Card.ID}}
+                <button
+                  class="btn bg-white min-h-9 px-3"
+                  data-attr:disabled="$anyBusy"
+                  data-indicator:busy-del-img
+                  data-on:click="$delKind = 'image'; $mediaKind = '';
+                    $imgSaved = ''; $imgPick = '';
+                    @get('/cards/{{.Card.ID}}/media/delete')"
+                  data-show="$imgSaved && !$imgPick"
+                  style="display: none"
+                  type="button"
+                >
+                  <span
+                    class="spinner"
+                    data-show="$busyDelImg"
                     style="display: none"
-                    type="button"
-                  >Remove</button>
-                  {{if .Card.ID}}
-                    <button
-                      class="btn bg-white min-h-9 px-3"
-                      data-attr:disabled="$anyBusy"
-                      data-indicator:busy-del-img
-                      data-on:click="$delKind = 'image'; $mediaKind = '';
-                        $imgUrl = ''; $imgPick = '';
-                        @get('/cards/{{.Card.ID}}/media/delete')"
-                      data-show="$imgPrev && !$imgPick"
-                      style="display: none"
-                      type="button"
-                    >
-                      <span
-                        class="spinner"
-                        data-show="$busyDelImg"
-                        style="display: none"
-                      ></span>
-                      Remove
-                    </button>
-                  {{end}}
-                </div>
-              </div>
+                  ></span>
+                  Remove saved image
+                </button>
+              {{end}}
+              <button
+                class="btn bg-white min-h-9 px-3"
+                data-on:click="document.querySelectorAll(
+                  '[name=front_image], [name=front_image_camera]').
+                  forEach(function (i) { i.value = ''; });
+                  $imgPick = ''; $imgStaged = ''"
+                data-show="$imgPick"
+                style="display: none"
+                type="button"
+              >Clear selection</button>
             </div>
-            {{/* data-bind on a file input: datastar reads the picked file
-                 into the signal as {name, contents(base64), mime}; the label
-                 shows its name. */}}
+            {{/* File inputs are NOT data-bound: media bytes must never
+                 enter the signal bulk (the save is GET). The instant
+                 preview channel is the data-bind'd imgPrev base64 (kept
+                 out of save via filterSignals); the durable channel is
+                 mediapick.js staging the file and mirroring the returned
+                 URL into the imgStaged partner. Pick name feeds the
+                 $imgPick gate through the regular binding path. */}}
             <input
               class="sr-only"
               accept="image/png,image/jpeg,image/webp,image/gif"
-              data-bind="imgData"
+              data-bind="imgPrev"
               name="front_image"
               type="file"
             >
@@ -264,15 +253,15 @@
               id="front-image-camera"
               accept="image/*"
               capture="environment"
-              data-bind="imgData"
+              data-bind="imgPrev"
               name="front_image_camera"
               type="file"
             >
-            {{/* mediapick.js watches the file inputs above and mirrors the
-                 picked file name into this bound partner, updating the
-                 $imgPick gate through the regular binding path. */}}
             <input class="sr-only" data-bind="imgPick"
               id="front_image_pick" type="text"
+            >
+            <input class="sr-only" data-bind="imgStaged"
+              id="front_image_staged" type="text"
             >
           </div>
 
@@ -286,17 +275,19 @@
               id="front-audio-input"
               class="sr-only"
               name="front_audio"
-              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
-              data-bind="audData"
+              accept="audio/*"
+              data-bind="audPrev"
               type="file"
             >
             <input class="sr-only" data-bind="audPick"
               id="front_audio_pick" type="text"
             >
+            <input class="sr-only" data-bind="audStaged"
+              id="front_audio_staged" type="text"
+            >
             <div
               class="flex flex-wrap items-center gap-2"
               data-record-hide
-              data-show="!$audPrev"
             >
               <button
                 class="btn-sun min-h-9 px-3"
@@ -317,7 +308,7 @@
                 data-record-target="#front-audio-input"
                 type="button"
               >{{if .Card.HasAudio}}Re-record audio{{else}}Record audio{{end}}</button>
-              <span class="text-xs text-ink/60">MP3/M4A/WAV/OGG · max 10 MB</span>
+              <span class="text-xs text-ink/60">Any audio type · max 10 MB</span>
             </div>
             {{/* Live recording row; record.js toggles its visibility. */}}
             <div
@@ -343,91 +334,77 @@
                 type="button"
               >Cancel</button>
             </div>
-            <div
-              class="border-2 border-dashed border-ink/40 rounded-xl px-3 py-4
-                     text-center text-xs text-ink/60"
-              data-record-hide
-              data-show="!$audPrev"
-            >
-              <svg class="mx-auto mb-1 size-6" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round"
-                aria-hidden="true"
-              ><rect x="9" y="2" width="6" height="12" rx="3"/><path
-                d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
-              <b class="text-ink">Add audio to the front</b><br>
-              Upload a clip or record straight from here
-            </div>
-            <div class="flex items-center gap-3" data-show="$audPrev">
-              <span
-                class="inline-flex size-9 items-center justify-center bg-sun
-                       border-2 border-ink rounded-full"
-                aria-hidden="true"
-              >
-                <svg class="size-4" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2.2"
-                  stroke-linecap="round" stroke-linejoin="round"
-                ><rect x="9" y="2" width="6" height="12" rx="3"/><path
-                  d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
-              </span>
-              <div class="flex min-w-0 flex-col gap-1">
-                <span
-                  class="truncate text-xs font-semibold"
-                  data-text="$audData[0]?.name || 'Current audio'"
-                ></span>
-                <audio
-                  class="w-56 max-w-full"
-                  controls
-                  preload="metadata"
-                  data-attr:src="$audPrev"
-                ></audio>
-                <div class="flex gap-2">
-                  <button
-                    class="btn-sun min-h-9 px-3"
-                    data-on:click="var i = document.querySelector(
-                      '[name=front_audio]'); i.value = ''; i.click();"
-                    type="button"
-                  >Replace</button>
-                  <button
-                    class="btn bg-white min-h-9 px-3"
-                    data-on:click="document.querySelector('[name=front_audio]').
-                      value = ''; $audPick = ''"
-                    data-show="$audPick"
+            {{/* Panel-state row: clear an unsaved pick, or delete the
+                 already-saved audio; the preview itself lives in the card
+                 flip in the sidebar. */}}
+            <div class="flex flex-wrap items-center gap-2">
+              {{if .Card.ID}}
+                <button
+                  class="btn bg-white min-h-9 px-3"
+                  data-attr:disabled="$anyBusy"
+                  data-indicator:busy-del-aud
+                  data-on:click="$delKind = 'audio'; $mediaKind = '';
+                    $audSaved = ''; $audPick = '';
+                    @get('/cards/{{.Card.ID}}/media/delete')"
+                  data-show="$audSaved && !$audPick"
+                  style="display: none"
+                  type="button"
+                >
+                  <span
+                    class="spinner"
+                    data-show="$busyDelAud"
                     style="display: none"
-                    type="button"
-                  >Remove</button>
-                  {{if .Card.ID}}
-                    <button
-                      class="btn bg-white min-h-9 px-3"
-                      data-attr:disabled="$anyBusy"
-                      data-indicator:busy-del-aud
-                      data-on:click="$delKind = 'audio'; $mediaKind = '';
-                        $audUrl = ''; $audPick = '';
-                        @get('/cards/{{.Card.ID}}/media/delete')"
-                      data-show="$audPrev && !$audPick"
-                      style="display: none"
-                      type="button"
-                    >
-                      <span
-                        class="spinner"
-                        data-show="$busyDelAud"
-                        style="display: none"
-                      ></span>
-                      Remove
-                    </button>
-                  {{end}}
-                </div>
-              </div>
+                  ></span>
+                  Remove saved audio
+                </button>
+              {{end}}
+              <button
+                class="btn bg-white min-h-9 px-3"
+                data-on:click="var i = document.querySelector(
+                  '[name=front_audio]'); i.value = ''; $audPick = '';
+                  $audStaged = ''"
+                data-show="$audPick"
+                style="display: none"
+                type="button"
+              >Clear selection</button>
             </div>
           </div>
         </fieldset>
         {{/* imgPick/audPick ride the @get signal bulk on save; save.go
              uses them as the opt-in gates for imgData/audData. */}}
+        {{/* Toast: server errors and staging failures push into the
+             $toast signal through the hidden partner input; mediapick.js
+             clears it after 6s. */}}
+        <input type="hidden" id="toast_partner" data-bind="toast">
+        <div
+          class="px-4 py-2 text-sm font-semibold text-white fixed
+                 left-1/2 bottom-6 z-50 -translate-x-1/2 flex items-center
+                 gap-2 rounded-xl border-2 border-ink
+                 bg-[#b3402e] shadow-retro-lg"
+          data-show="$toast !== ''"
+          style="display: none"
+          data-text="$toast"
+        ></div>
         <div class="flex gap-2">
           <button
             class="btn-sun"
-            data-on:click="@get('/cards/save')"
-            type="button">Save</button>
+            data-attr:disabled="$anyBusy"
+            data-indicator:busy-save
+            data-on:click="if (($category || '').trim().toLowerCase() === 'none') {
+                $toast = 'Tag name “None” is reserved';
+                return;
+              };
+              @get('/cards/save', {filterSignals: {
+              include: /^(id|front|back|category|mediaKind|imgPick|audPick|imgStaged|audStaged)$/}})"
+            type="button">
+            <span
+              class="spinner"
+              data-show="$busySave || ($imgPick && !$imgStaged)
+                || ($audPick && !$audStaged)"
+              style="display: none"
+            ></span>
+            Save
+          </button>
           <a class="btn bg-white" href="/cards">Cancel</a>
         </div>
       </div>

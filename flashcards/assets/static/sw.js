@@ -1,7 +1,7 @@
 // Retro Flashcards service worker: offline shell for the PWA demo.
 // Cache-first for static assets, network-first for pages with a cached
 // shell fallback.
-const VERSION = "v2";
+const VERSION = "v8";
 const SHELL = [`/`, `/assets/css/index.css`, `/assets/js/datastar.js`,
   `/assets/fonts/poppins-400.woff2`, `/assets/fonts/poppins-500.woff2`,
   `/assets/fonts/poppins-600.woff2`, `/assets/fonts/poppins-700.woff2`,

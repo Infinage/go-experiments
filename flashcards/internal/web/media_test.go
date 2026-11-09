@@ -2,21 +2,20 @@ package web
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"image"
 	"image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
+	"testing"
 
 	"github.com/infinage/go-experiments/flashcards/internal/store"
-	"testing"
 )
 
-// pngBytes renders a valid 1x1 PNG for sniffing tests.
 func pngBytes(t *testing.T) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -26,24 +25,49 @@ func pngBytes(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-// sigSave posts a card save with base64 media, the way formmedia.js
-// delivers it (signals on the query string).
-func sigSave(h http.Handler, fields map[string]string, files map[string][]byte) *httptest.ResponseRecorder {
-	sig := map[string]any{}
-	for k, v := range fields {
-		sig[k] = v
+// stageUpload mimics mediapick.js: POST the picked file to the staging
+// store and keep the returned URL for the save signals.
+func stageUpload(t testing.TB, h http.Handler, kind string, data []byte) string {
+	t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", "upload."+map[string]string{
+		"image": "png", "audio": "bin", "bad": "bin"}[kind])
+	if err != nil {
+		t.Fatal(err)
 	}
-	for k, data := range files {
-		sig[k] = []fileSignal{{
-			Name:     "upload",
-			Contents: base64.StdEncoding.EncodeToString(data),
-		}}
-		// The pick opt-in gate: a file bulk only applies when the
-		// corresponding pick-string signal is set (client-side
-		// $imgPick / $audPick).
-		sig[strings.TrimSuffix(k, "Data")+"Pick"] = "upload"
+	if _, err := fw.Write(data); err != nil {
+		t.Fatal(err)
 	}
-	raw, err := json.Marshal(sig)
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/cards/media/stage", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("stage: %d %s", rec.Code, rec.Body.String())
+	}
+	var out struct{ URL string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.URL == "" {
+		t.Fatal("stage returned no url")
+	}
+	return out.URL
+}
+
+// sigSave posts a card save with staged media URLs on the query string,
+// the way the datastar GET save delivers it.
+func sigSave(h http.Handler, fields map[string]string) *httptest.ResponseRecorder {
+	return sigQuery(h, fields)
+}
+
+// sigQuery posts raw signal fields to a datastar GET endpoint.
+func sigQuery(h http.Handler, fields map[string]string) *httptest.ResponseRecorder {
+	raw, err := json.Marshal(fields)
 	if err != nil {
 		panic(err)
 	}
@@ -57,9 +81,11 @@ func sigSave(h http.Handler, fields map[string]string, files map[string][]byte) 
 
 func TestUploadImageSaves(t *testing.T) {
 	h, db := realHandler(t)
+	staged := stageUpload(t, h, "image", pngBytes(t))
 	rec := sigSave(h, map[string]string{
 		"front": "q", "back": "a",
-	}, map[string][]byte{"imgData": pngBytes(t)})
+		"imgPick": "upload.png", "imgStaged": staged,
+	})
 	if rec.Code != 200 {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
@@ -96,91 +122,88 @@ func TestUploadImageSaves(t *testing.T) {
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
-func TestUploadRejectsBadContent(t *testing.T) {
+func TestStageRejectsBadContent(t *testing.T) {
 	h, _ := realHandler(t)
 	cases := []struct {
-		name  string
-		files map[string][]byte
-		want  string
+		name string
+		data []byte
+		want string
 	}{
-		{"text as image", map[string][]byte{"imgData": []byte("hello")}, "unsupported"},
-		{"text as audio", map[string][]byte{"audData": []byte("hello")}, "unsupported"},
+		{"text", []byte("hello"), "unsupported"},
 	}
 	for _, tc := range cases {
-		rec := sigSave(h, map[string]string{
-			"front": "q", "back": "a",
-		}, tc.files)
+		var buf bytes.Buffer
+		mw := multipart.NewWriter(&buf)
+		fw, _ := mw.CreateFormFile("file", "upload.bin")
+		fw.Write(tc.data)
+		mw.Close()
+		req := httptest.NewRequest("POST", "/cards/media/stage", &buf)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), tc.want) {
 			t.Errorf("%s: %d %s", tc.name, rec.Code, rec.Body.String())
 		}
 	}
-	// Oversized image: just over the limit.
-	big := bytes.Repeat(pngBytes(t), 80000) // > 5 MB of valid PNG
+}
+
+func TestSaveRejectsOversizedStagedImage(t *testing.T) {
+	h, _ := realHandler(t)
+	// A valid PNG just over the 5 MB image limit: staging accepts it
+	// (stage cap 12 MB covers audio), the save rejects it.
+	big := bytes.Repeat(pngBytes(t), 80000)
+	st := stageUpload(t, h, "image", big)
 	rec := sigSave(h, map[string]string{
 		"front": "q", "back": "a",
-	}, map[string][]byte{"imgData": big})
-	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "limit") {
+		"imgPick": "big.png", "imgStaged": st,
+	})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "limit") {
 		t.Errorf("oversize: %d %s", rec.Code, rec.Body.String())
 	}
-
-	// A pick-less bulk is ignored: image without the imgPick opt-in —
-	// save succeeds but nothing is attached.
-	sig := map[string]any{
-		"front": "q", "back": "a",
-		"imgData": []fileSignal{{
-			Name:     "upload",
-			Contents: base64.StdEncoding.EncodeToString(pngBytes(t)),
-		}},
-	}
-	raw, err := json.Marshal(sig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest("GET", "/cards/save", nil)
-	req.Header.Set("Datastar-Request", "true")
-	req.URL.RawQuery = "datastar=" + url.QueryEscape(string(raw))
-	rec2 := httptest.NewRecorder()
-	h.ServeHTTP(rec2, req)
-	if rec2.Code != 200 {
-		t.Fatalf("pick-less save: %d %s", rec2.Code, rec2.Body.String())
-		_ = err
+	// Datastar saves surface errors as executed toast(...) calls, not
+	// bare status codes (silent 400s had no visible feedback).
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/javascript") {
+		t.Errorf("oversize content-type: %q", ct)
 	}
 }
 
-// A never-picked bound file input ships [""] (datastar's empty-value
-// initialisation); the save must ignore it instead of failing decode.
-func TestSaveSignalsEmptyFileArray(t *testing.T) {
+func TestSavePicklessStagedURLIgnored(t *testing.T) {
 	h, db := realHandler(t)
-	raw, err := json.Marshal(map[string]any{
-		"front": "q", "back": "a",
-		"imgData": []string{""},
-		"audData": []string{""},
+	// Staged data with no pick opt-in: save succeeds, nothing attached.
+	staged := stageUpload(t, h, "image", pngBytes(t))
+	rec := sigSave(h, map[string]string{
+		"front": "q", "back": "a", "imgStaged": staged,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest("GET", "/cards/save", nil)
-	req.Header.Set("Datastar-Request", "true")
-	req.URL.RawQuery = "datastar=" + url.QueryEscape(string(raw))
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
 	if rec.Code != 200 {
-		t.Fatalf("empty-array save: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("pick-less save: %d %s", rec.Code, rec.Body.String())
 	}
-	cards, err := db.Cards("", "", "")
-	if err != nil {
-		t.Fatal(err)
+	cs, _ := db.Cards("", "", "")
+	if len(cs) != 2 || cs[0].HasImage {
+		t.Fatalf("pick-less save attached media: %+v", cs)
 	}
-	for _, c := range cards {
-		if c.Front != "q" {
-			continue
-		}
-		if c.HasImage || c.HasAudio {
-			t.Fatalf("empty-array save attached media: %+v", c)
-		}
-		return
+
+	// A pick with no staged URL yet means the upload is still in
+	// flight: the save must say so instead of silently dropping media.
+	rec = sigQuery(h, map[string]string{
+		"front": "q", "back": "a", "imgPick": "busy.png",
+	})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "still uploading") {
+		t.Errorf("staging-in-flight: %d %s", rec.Code, rec.Body.String())
 	}
-	t.Fatalf("empty-array save did not store the card: %+v", cards)
+}
+
+// A stale staged URL (GC'd or from a previous server run) re-prompt
+// instead of failing the whole save with an opaque error.
+func TestSaveStagedURLLost(t *testing.T) {
+	h, _ := realHandler(t)
+	rec := sigQuery(h, map[string]string{
+		"front": "q", "back": "a",
+		"imgPick":   "x.png",
+		"imgStaged": "/cards/media/tmp/deadbeefdeadbeefdeadbeef",
+	})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "re-pick") {
+		t.Fatalf("lost staged: %d %s", rec.Code, rec.Body.String())
+	}
 }
 
 func TestMediaMissing(t *testing.T) {

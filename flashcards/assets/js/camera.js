@@ -47,6 +47,11 @@
     document.getElementById("camera-modal").style.display = "none";
   }
 
+  // Media-kind switches must close any open camera preview.
+  window.stopActiveCamera = function () {
+    if (stream) close();
+  };
+
   async function open(input) {
     targetInput = input;
     try {

@@ -1,9 +1,6 @@
 package web
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,6 +29,8 @@ type cardsData struct {
 	Category   string
 	Media      string
 	Categories []store.Category
+	// NoneCount backs the *None* pseudo-row: cards without a category.
+	NoneCount int
 }
 
 func (s *Server) cardsPage(w http.ResponseWriter, r *http.Request) {
@@ -66,13 +65,20 @@ func (s *Server) cardsData(q, category, media string) (*cardsData, error) {
 	if err != nil {
 		return nil, err
 	}
+	none, err := s.store.UntaggedCount()
+	if err != nil {
+		return nil, err
+	}
 	return &cardsData{Cards: cards, Query: q, Category: cat(cats, category),
-		Media: media, Categories: cats}, nil
+		Media: media, Categories: cats, NoneCount: none}, nil
 }
 
 // cat passes the filter through only when it names a known category, so a
 // stale value doesn't yield a silently empty list.
 func cat(cats []store.Category, category string) string {
+	if category == store.NoneFilter {
+		return category
+	}
 	for _, c := range cats {
 		if c.Name == category {
 			return category
@@ -181,69 +187,27 @@ func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
 		Preview: previewCardFlip(c.Front, c.Back, c)})
 }
 
-// fileSignal is one file picked via data-bind on a file input: datastar
-// reads the file as data URL and ships {name, contents (base64), mime}.
-type fileSignal struct {
-	Name     string `json:"name"`
-	Contents string `json:"contents"` // base64, no data: prefix
-	Mime     string `json:"mime"`
-}
-
-// fileList decodes a data-bind file-input signal leniently: datastar
-// initializes a never-picked bound file input to [""] (its empty
-// input.value), which strict []fileSignal decoding rejects — every
-// text-only save would 400. Object entries decode normally; anything
-// else ("", null, numbers) is ignored.
-type fileList []fileSignal
-
-func (f *fileList) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	out := make([]fileSignal, 0, len(raw))
-	for _, r := range raw {
-		if !bytes.HasPrefix(bytes.TrimSpace(r), []byte("{")) {
-			continue
-		}
-		var file fileSignal
-		if err := json.Unmarshal(r, &file); err != nil {
-			return err
-		}
-		out = append(out, file)
-	}
-	*f = out
-	return nil
-}
-
 // saveSignals holds the card-form save, submitted via datastar GET
 // (signals on the query string — the Android webview asset bridge rejects
-// request bodies). Media arrives as base64 arrays from data-bind.
+// request bodies). Media bytes never ride the query: picks are staged
+// via POST /cards/media/stage and referenced here by short URL
+// (/cards/media/tmp/<token>); the instant-preview base64 signals
+// (imgPrev/audPrev) are filtered out client-side.
 type saveSignals struct {
-	ID        any      `json:"id"` // bind on a hidden input yields a string
-	Front     string   `json:"front"`
-	Back      string   `json:"back"`
-	Category  string   `json:"category"`
-	MediaKind string   `json:"mediaKind"`
-	ImgData   fileList `json:"imgData"`
-	AudData   fileList `json:"audData"`
+	ID        any    `json:"id"` // bind on a hidden input yields a string
+	Front     string `json:"front"`
+	Back      string `json:"back"`
+	Category  string `json:"category"`
+	MediaKind string `json:"mediaKind"`
 	// ImgPick/AudPick carry the name of the file the user picked via
-	// upload / camera / recorder. They act as opt-ins: a signal bulk is
+	// upload / camera / recorder. They act as opt-ins: a staged URL is
 	// only attached when its pick string is set, so switching the media
-	// kind or pressing Remove can reliably drop a picked file without
-	// having to clear the (file-bound, array-typed) data signal client
-	// side — datastar can't assign a fresh empty array from a template
-	// expression.
-	ImgPick string `json:"imgPick"`
-	AudPick string `json:"audPick"`
-}
-
-// picked filters the file array by its pick opt-in.
-func picked(files fileList, pickName string) fileList {
-	if pickName == "" {
-		return nil
-	}
-	return files
+	// kind or clearing a pick reliably drops the intent without having
+	// to erase the staged URL client side.
+	ImgPick   string `json:"imgPick"`
+	AudPick   string `json:"audPick"`
+	ImgStaged string `json:"imgStaged"`
+	AudStaged string `json:"audStaged"`
 }
 
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
@@ -279,22 +243,40 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	fail := func(err error, code int) {
+		if isDatastarRequest(r) {
+			// The fetch plugin evaluates text/javascript bodies, so
+			// surface the failure as a toast instead of a silent status.
+			w.Header().Set("Content-Type", "text/javascript")
+			fmt.Fprintf(w, "toast(%q)", err.Error())
+			return
+		}
+		http.Error(w, err.Error(), code)
+	}
+	// "None" is reserved for the untagged pseudo-category in the
+	// filter dropdowns; a real tag with that name would be
+	// indistinguishable from it.
+	if strings.EqualFold(category, "none") {
+		fail(errors.New(`the tag name "None" is reserved`),
+			http.StatusUnprocessableEntity)
+		return
+	}
 	if id != 0 {
 		if err := s.store.UpdateCard(id, front, back, category); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fail(err, http.StatusInternalServerError)
 			return
 		}
 	} else {
 		var err error
 		id, err = s.store.CreateCard(front, back, category)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			fail(err, http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if err := s.saveMediaSignals(sig, id); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		fail(err, http.StatusBadRequest)
 		return
 	}
 	if isDatastarRequest(r) {
@@ -309,16 +291,16 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/cards", http.StatusSeeOther)
 }
 
-// saveMediaSignals stores the card-front media from base64 signal data,
+// saveMediaSignals stores the card-front media from staged picks,
 // enforcing image-XOR-audio: a card may carry an image or audio, never
 // both. mediaKind drives the cleanup of the unselected type.
 func (s *Server) saveMediaSignals(sig saveSignals, id int64) error {
-	image, err := mediaFromSignals(picked(sig.ImgData, sig.ImgPick),
+	image, err := s.adoptStaged(sig.ImgStaged, sig.ImgPick,
 		"image", maxImageBytes)
 	if err != nil {
 		return err
 	}
-	audio, err := mediaFromSignals(picked(sig.AudData, sig.AudPick),
+	audio, err := s.adoptStaged(sig.AudStaged, sig.AudPick,
 		"audio", maxAudioBytes)
 	if err != nil {
 		return err
@@ -350,25 +332,6 @@ func (s *Server) saveMediaSignals(sig saveSignals, id int64) error {
 		}
 		return clearErr(s.store.ClearAudio(id))
 	}
-}
-
-// mediaFromSignals turns the picked files from a data/bind file input
-// (datastar ships {name, contents base64, mime}) into store.Media with a
-// size cap, sniffing the real content type.
-func mediaFromSignals(files fileList, kind string, limit int) (store.Media, error) {
-	if len(files) == 0 || files[0].Contents == "" {
-		return store.Media{}, nil
-	}
-	f := files[0]
-	b, err := base64.StdEncoding.DecodeString(f.Contents)
-	if err != nil {
-		return store.Media{}, err
-	}
-	if len(b) > limit {
-		return store.Media{}, errTooLarge(kind, limit)
-	}
-	m, err := store.Media{Bytes: b, Mime: sniffMime(b)}, sniffCheck(b, kind)
-	return m, err
 }
 
 // sniffCheck validates the sniffed type against the accepted media sets

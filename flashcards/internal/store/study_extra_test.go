@@ -118,3 +118,57 @@ func TestCardsByIDs(t *testing.T) {
 		t.Fatal("unreviewed card should be New")
 	}
 }
+
+// Untagged cards must be selectable via the NoneFilter sentinel: the
+// cards list, the study queue and reset all key off category = "".
+func TestNoneFilterFlows(t *testing.T) {
+	s := mustStore(t)
+	tagged, _ := s.CreateCard("q1", "", "web")
+	untagged, _ := s.CreateCard("q2", "", "")
+
+	n, err := s.UntaggedCount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("untagged = %d, want 1", n)
+	}
+
+	cs, err := s.Cards("", NoneFilter, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cs) != 1 || cs[0].ID != untagged {
+		t.Fatalf("None-filtered cards: %+v", cs)
+	}
+
+	// Pending counts group untagged under the "" name.
+	s.Review(tagged, srs.Easy, time.Now()) // 1-day interval, due later
+	pending, err := s.CategoryPending()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The just-reviewed card is due tomorrow, so the "web" group
+	// disappears entirely (GROUP BY lists only non-empty groups; the
+	// dropdown renders the missing count as "-").
+	want := map[string]int{"": 1} // untagged card was never reviewed
+	if len(pending) != 1 {
+		t.Fatalf("pending groups: %+v", pending)
+	}
+	for _, c := range pending {
+		if want[c.Name] != c.Count {
+			t.Fatalf("pending[%q] = %d, want %d", c.Name, c.Count, want[c.Name])
+		}
+	}
+
+	// Reset with the sentinel clears only the untagged cards' state.
+	if err := s.ResetProgress(NoneFilter); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := s.ReviewState(untagged); ok {
+		t.Fatal("untagged card should have lost its review state")
+	}
+	if _, ok, _ := s.ReviewState(tagged); !ok {
+		t.Fatal("tagged card should keep its review state")
+	}
+}
