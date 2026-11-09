@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcards → Wails3: PWA or straight to APK?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2b1208; --cream:#f7f3ec; --sun:#ffc93c; --pink:#ff8ae2;
+    --sky:#94a9f0; --mint:#4fddc7; --rose:#f0719f; --white:#fff;
+  }
+  *{box-sizing:border-box; min-width:0}
+  body{margin:0; background:var(--cream); color:var(--ink);
+    font-family:Poppins,ui-sans-serif,system-ui,sans-serif; font-size:15px; line-height:1.55}
+  .wrap{max-width:60rem; margin:0 auto; padding:1.5rem 1.25rem 4rem}
+  h1{font-size:1.7rem; font-weight:800; line-height:1.2; margin:.2rem 0 .3rem}
+  h2{font-size:1.15rem; font-weight:700; margin:2.2rem 0 .6rem; letter-spacing:.01em}
+  h3{font-size:.95rem; font-weight:600; margin:1rem 0 .35rem}
+  p{margin:.4rem 0}
+  .kicker{display:inline-block; background:var(--sun); border:2px solid var(--ink);
+    border-radius:999px; padding:.15rem .8rem; font-size:.72rem; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase}
+  .box{background:var(--white); border:2px solid var(--ink); border-radius:14px;
+    box-shadow:3px 3px 0 var(--ink); padding:1rem 1.1rem}
+  .answer{margin-top:1.2rem; border-left:8px solid var(--mint)}
+  .answer strong{color:#0b7a63}
+  .badge{display:inline-block; border:2px solid var(--ink); border-radius:999px;
+    background:var(--cream); padding:.05rem .6rem; font-size:.72rem; font-weight:600}
+  .badge.nope{background:var(--rose)}
+  .badge.ok{background:var(--mint)}
+  .badge.warn{background:var(--sun)}
+  table{width:100%; border-collapse:separate; border-spacing:0; background:var(--white);
+    border:2px solid var(--ink); border-radius:14px; overflow:hidden; box-shadow:3px 3px 0 var(--ink)}
+  th,td{padding:.5rem .7rem; text-align:left; vertical-align:top; font-size:.86rem;
+    border-bottom:1px solid color-mix(in oklab, var(--ink) 25%, transparent)}
+  tr:last-child td{border-bottom:none}
+  th{background:var(--sun); font-size:.78rem; text-transform:uppercase; letter-spacing:.05em}
+  td b{display:block; font-size:.8rem}
+  .cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); gap:1rem; margin:.8rem 0}
+  .cols>.box{min-width:0}
+  .opt{border-top:10px solid var(--pink)}
+  .opt.winner{border-top-color:var(--mint)}
+  .opt .tag{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:color-mix(in oklab, var(--ink) 60%, transparent)}
+  code,.mono{font-family:var(--font-mono,ui-monospace,monospace); font-size:.82em;
+    background:color-mix(in oklab, var(--ink) 8%, var(--white)); border:1px solid
+    color-mix(in oklab, var(--ink) 30%, transparent); border-radius:6px; padding:.05rem .3rem}
+  .steps{counter-reset:s; padding:0; margin:.8rem 0; list-style:none}
+  .steps li{position:relative; padding:.55rem .8rem .55rem 2.6rem; margin:.45rem 0;
+    background:var(--white); border:2px solid var(--ink); border-radius:12px; font-size:.9rem}
+  .steps li::before{counter-increment:s; content:counter(s); position:absolute; left:.5rem; top:.5rem;
+    width:1.5rem; height:1.5rem; border-radius:50%; border:2px solid var(--ink); background:var(--sun);
+    display:grid; place-items:center; font-size:.8rem; font-weight:800}
+  .risk{background:color-mix(in oklab, var(--rose) 18%, var(--white))}
+  .fig{margin:.9rem 0}
+  .fig svg{display:block; width:100%; height:auto; border:2px solid var(--ink); border-radius:14px;
+    background:var(--white); box-shadow:3px 3px 0 var(--ink)}
+  .verdict{margin:2rem 0; text-align:center; padding:1.4rem}
+  .verdict p{font-size:1.05rem; font-weight:600}
+  .verdict .stamps{display:flex; gap:.6rem; justify-content:center; margin-top:.7rem; flex-wrap:wrap}
+  .footnote{font-size:.78rem; color:color-mix(in oklab, var(--ink) 65%, transparent); margin-top:.3rem}
+  .vq{color:#8a5a00; font-weight:700; text-transform:uppercase; font-size:.68rem; letter-spacing:.05em}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<span class="kicker">Flashcards · Android-only · analysis captured in WAILS_MIGRATION.md</span>
+<h1>PWA first… or straight to a Wails3 APK?</h1>
+<p class="footnote">Reading goal: you asked (a) what it takes to make this app work as a PWA and (b) whether an intermediate PWA would hinder the end goal — an APK via Wails3. Sources: the two Wails3 docs pages you saved to <code>~/Downloads</code>, this repo's code. Claims marked <span class="vq">[VERIFY]</span> still need a on-device check.</p>
+
+<div class="box answer">
+  <p><strong>One-sentence answer: skip the PWA.</strong> The only PWA work that carries over to Wails is a thrown-away hour (manifest + icons); the work that makes a PWA genuinely useful for this app — an offline, browser-side data layer — is a multi-day rewrite that becomes <em>dead code</em> under Wails, and its absence is exactly why an installed PWA on your daily-reset server buys you nothing today. The Wails port itself is small because this app is already shaped right: a plain <code>net/http</code> server whose frontend is static files + datastar.</p>
+</div>
+
+<h2>The three pieces of "PWA support", and where each ends up</h2>
+<div class="fig">
+<svg viewBox="0 0 860 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PWA pieces flow into Wails as: manifest/icons discarded, service worker discarded, offline data layer becomes active SQLite on device">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2b1208"/>
+    </marker>
+  </defs>
+  <g font-family="Poppins, sans-serif" font-size="14" fill="#2b1208">
+    <rect x="20" y="18" width="250" height="190" rx="14" fill="#f7f3ec" stroke="#2b1208" stroke-width="3"/>
+    <text x="145" y="48" text-anchor="middle" font-size="16" font-weight="800">PWA (a) achieve</text>
+    <g font-size="13.5">
+      <rect x="38" y="66" width="214" height="30" rx="9" fill="#ffc93c" stroke="#2b1208" stroke-width="2.5"/>
+      <text x="145" y="86" text-anchor="middle" font-weight="600">manifest + icons · ~1h</text>
+      <rect x="38" y="104" width="214" height="30" rx="9" fill="#94a9f0" stroke="#2b1208" stroke-width="2.5"/>
+      <text x="145" y="124" text-anchor="middle" font-weight="600">service worker · 2–4h</text>
+      <rect x="38" y="142" width="214" height="54" rx="9" fill="#f0719f" stroke="#2b1208" stroke-width="2.5"/>
+      <text x="145" y="163" text-anchor="middle" font-weight="700">offline data layer · days</text>
+      <text x="145" y="182" text-anchor="middle" font-size="12">SQLite-in-browser / IndexedDB + sync</text>
+    </g>
+    <text x="430" y="120" text-anchor="middle" font-weight="800" font-size="15">Wails3 APK</text>
+    <rect x="330" y="40" width="200" height="150" rx="14" fill="#94a9f0" stroke="#2b1208" stroke-width="3"/>
+    <text x="430" y="105" text-anchor="middle" font-weight="700">WebView renders UI</text>
+    <text x="430" y="128" text-anchor="middle">assets served in-process</text>
+    <text x="430" y="152" text-anchor="middle">SQLite file in app sandbox</text>
+    <!-- arrows: carrying over -->
+    <path d="M258 81 C 300 81, 315 115, 342 115" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr)" stroke-dasharray="6 5"/>
+    <path d="M258 119 L 342 119" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr)"/>
+    <path d="M258 169 C 300 169, 315 124, 342 123" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr)"/>
+    <g font-size="12" font-weight="700">
+      <text x="278" y="72" text-anchor="middle" fill="#b32457">dead</text>
+      <text x="300" y="112" text-anchor="middle" fill="#b32457">dead</text>
+      <text x="300" y="182" text-anchor="middle" fill="#0b7a63">alive</text>
+    </g>
+    <rect x="600" y="18" width="240" height="190" rx="14" fill="#4fddc7" stroke="#2b1208" stroke-width="3"/>
+    <text x="720" y="52" text-anchor="middle" font-size="16" font-weight="800">What Wails actually gives</text>
+    <g font-size="13">
+      <text x="620" y="86">· real installable APK, no browser</text>
+      <text x="620" y="110">· real SQLite file, persists forever</text>
+      <text x="620" y="134">· offline by default (data + assets</text>
+      <text x="630" y="153">both live on device)</text>
+      <text x="620" y="180">· iOS dropped: Android-only cost</text>
+    </g>
+  </g>
+</svg>
+</div>
+
+<p>The crux is the pink row: <strong>SQLite cannot "work as a PWA" by itself.</strong> Our data lives in the Go process — a browser install just caches the shell while the data stays on your server. Making it offline means either SQLite-in-browser (sql.js + OPFS) or a full IndexedDB store + sync: days of work that (per the diagram) is discarded the moment Wails gives you a real SQLite file on device.</p>
+
+<h2>Does the intermediate PWA hinder the Wails goal?</h2>
+<p>Not fatally — but classify the work honestly:</p>
+<table>
+  <tr><th>PWA piece</th><th>Effort</th><th>Carries to Wails?</th><th>Verdict</th></tr>
+  <tr><td><b>manifest.json + icons + meta tags</b></td><td>~1h</td><td><span class="badge nope">No — Wails has its own launcher/APK</span></td><td><b>Decision: ditched — confirmed in your review annotation</b></td></tr>
+  <tr><td><b>Service worker (cache shell + assets)</b></td><td>2–4h</td><td><span class="badge nope">No — useless over the in-process asset scheme <span class="vq">[VERIFY]</span></span></td><td>skip</td></tr>
+  <tr><td><b>Offline data layer + sync</b></td><td>days</td><td><span class="badge nope">Worse than no — a client DB + sync layer is confusing dead code</span></td><td><b>Decision: ditched — confirmed; Wails makes it redundant</b></td></tr>
+</table>
+<p class="footnote">Storage on your domain resets daily — so the installed-PWA idea fails today exactly because of the row 3 work. That's the strongest argument for going straight to Wails.</p>
+
+<h2>Wails3 Android: what the docs actually say</h2>
+<div class="cols">
+  <div class="box">
+    <h3 style="margin-top:0">Architecture (from the Android guide)</h3>
+    <p>Android <b>WebView</b> renders the frontend; assets are served <b>in-process</b> via <code>WebViewAssetLoader</code> — no localhost server, no open ports. Go is compiled to a C shared lib <code>libwails.so</code> (<code>GOOS=android</code> + NDK) loaded by a small Java host. "You do not need to change your Go code. The same <code>main.go</code> builds for all targets." (<i>first-mobile-app</i> page)</p>
+  </div>
+  <div class="box">
+    <h3 style="margin-top:0">Toolchain (one-time)</h3>
+    <p><code>ANDROID_HOME</code> / <code>ANDROID_SDK_ROOT</code>; SDK incl. <code>platform-tools</code>, <code>platforms;android-35</code>, <code>build-tools;35.0.0</code>, <b>NDK 26.3.11579264</b>, JDK 21 (<code>sudo apt install openjdk-21-jdk</code>), <code>wails3 doctor</code> to verify. You already have <code>commandlinetools-linux-15859902_latest.zip</code> in <code>~/Downloads</code>.</p>
+  </div>
+  <div class="box">
+    <h3 style="margin-top:0">Commands you'll actually run</h3>
+    <p><code>wails3 task android:run</code> — build + emulator<br>
+    <code>wails3 task android:run:device</code> — sideload to my phone (<code>DEVICE_ID</code>)<br>
+    <code>wails3 task android:package:fat</code> — universal APK for quick shares<br>
+    <code>android:bundle:fat</code> — AAB, only needed for Play<br><br>
+    First build 5–10 min, incremental &lt;1 min. WebView inspectable at <code>chrome://inspect</code>.</p>
+  </div>
+</div>
+
+<h2>The port work on this repo (file by file)</h2>
+<div class="fig">
+<svg viewBox="0 0 860 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Repo slices: main.go entrypoint forks per platform, store stays identical, web templates stay identical">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2b1208"/>
+    </marker>
+  </defs>
+  <g font-family="Poppins, sans-serif" font-size="13.5" fill="#2b1208">
+    <rect x="20" y="20" width="240" height="210" rx="14" fill="#f7f3ec" stroke="#2b1208" stroke-width="3"/>
+    <text x="140" y="50" text-anchor="middle" font-size="15" font-weight="800">Current repo</text>
+    <rect x="38" y="66" width="204" height="34" rx="9" fill="#ffc93c" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="140" y="88" text-anchor="middle" font-weight="600">main.go · ListenAndServe</text>
+    <rect x="38" y="108" width="204" height="34" rx="9" fill="#94a9f0" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="140" y="130" text-anchor="middle" font-weight="600">internal/web (templates, datastar)</text>
+    <rect x="38" y="150" width="204" height="34" rx="9" fill="#94a9f0" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="140" y="172" text-anchor="middle" font-weight="600">internal/store (SQLite)</text>
+    <text x="140" y="212" text-anchor="middle" font-size="12">uniform Go server, no mobile fork yet</text>
+
+    <path d="M288 83 C 370 83, 480 83, 560 83" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <path d="M288 125 L 560 125" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <path d="M288 167 C 370 167, 480 167, 560 167" fill="none" stroke="#2b1208" stroke-width="2.5" marker-end="url(#arr2)"/>
+    <text x="424" y="72" text-anchor="middle" font-size="12" font-weight="700">1 edit + build tags</text>
+    <text x="424" y="118" text-anchor="middle" font-size="12" font-weight="700">reuse as-is</text>
+    <text x="424" y="160" text-anchor="middle" font-size="12" font-weight="700">reuse as-is, driver is pure Go</text>
+
+    <rect x="588" y="20" width="252" height="210" rx="14" fill="#4fddc7" stroke="#2b1208" stroke-width="3"/>
+    <text x="714" y="50" text-anchor="middle" font-size="15" font-weight="800">Wails3 APK shape</text>
+    <rect x="606" y="66" width="216" height="34" rx="9" fill="#ffc93c" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="714" y="88" text-anchor="middle" font-weight="600">//go:build android fork in main.go</text>
+    <rect x="606" y="108" width="216" height="34" rx="9" fill="#94a9f0" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="714" y="130" text-anchor="middle" font-weight="600">same templates + datastar</text>
+    <rect x="606" y="150" width="216" height="34" rx="9" fill="#94a9f0" stroke="#2b1208" stroke-width="2.5"/>
+    <text x="714" y="172" text-anchor="middle" font-weight="600">same modernc.org/sqlite</text>
+    <text x="714" y="212" text-anchor="middle" font-size="12">db path must move into app sandbox</text>
+  </g>
+</svg>
+</div>
+<ol class="steps">
+  <li><b>Entry point split.</b> <code>main.go:22-42</code> currently does <code>http.ListenAndServe</code>. Under Wails3 the asset/root handler is handed to the Wails app instead. Fork per platform via build tags: <code>//go:build android</code> calls the wails runtime with the existing <code>internal/web</code> handler as its AssetServer; <code>//go:build !android</code> keeps <code>ListenAndServe</code> untouched on desktop/web. <span class="vq">[VERIFY]</span> exact handler-API name when scaffolding.</li>
+  <li><b>DB path.</b> <code>main.go:23</code> uses a CWD-relative <code>flashcards.db</code>. CWD is not writable on Android — the db must live in the app sandbox files dir. <span class="vq">[VERIFY]</span> preferred accessor (Wails path API vs <code>os.UserCacheDir()</code>).</li>
+  <li><b>SQLite driver (modernc.org/sqlite).</b> This answers your "sqlite3 database stuff as it is?" question: <b>yes, genuinely</b> — the driver is pure Go (no cgo), compiles into <code>libwails.so</code> unchanged, and runs the same file-based SQLite. Schema and queries don't change. Only the path from (2) moves.</li>
+  <li class="risk"><b>Biggest runtime risk — datastar SSE through the in-process asset scheme.</b> Fragments/fetch already go over plain HTTP in-process; <span class="vq">[VERIFY]</span> that <code>EventSource</code> (SSE) is not buffered by <code>WebViewAssetLoader</code> on Android WebView. Fallback = datastar fetch/poll, which needs no SSE. prove-or-fallback first with a hello-world fragment.</li>
+  <li><b>Everything else carries as-is.</b> <code>internal/store</code>, templates, tailwind, camera/record JS (mobile camera already routes through the WebView's <code>&lt;input type=file capture&gt;</code> — same semantics <span class="vq">[VERIFY]</span>). Add 44px tap targets + safe-area insets only when the phone feels cramped.</li>
+  <li><b>No PWA artifacts anywhere.</b> Wails has its own launcher; a manifest/SW would be inert.</li>
+</ol>
+
+<h2>Suggested order of work</h2>
+<ol class="steps">
+  <li>Install toolchain from the zip in <code>~/Downloads</code> → <code>wails3 doctor</code> all-green</li>
+  <li><b>Hello-world Wails3 mobile probe first</b> — minimal <code>main.go</code> + one datastar fragment over SSE through the in-process asset scheme → decide SSE vs fetch/poll (risk item 4). <b>Don't lean on <code>wails3 init</code></b>: we already have an existing repo, so init output is a reference, not a scaffold.</li>
+  <li><b>Replicate what <code>wails3 init</code> generates into the flashcards repo</b> — study the generated Taskfile android targets, <code>build/</code>, app config, and port only those pieces rather than scaffolding fresh. <span class="vq">[VERIFY]</span> exact generated file set (v3 alpha).</li>
+  <li>Port flashcards: entry split + db path, nothing else → <code>android:run</code>, debug via <code>chrome://inspect</code></li>
+  <li><code>android:run:device</code> → sideload APK on your phone for real demos</li>
+  <li>Later/optional for Play: <code>android:bundle:fat</code> + own keystore, bump <code>versionCode</code> per upload</li>
+</ol>
+<p class="footnote">Effort: toolchain 30–60 min; scratch hello-world 30–45 min; real port ≈ half a day, dominated by the SSE risk item and first-build NDK friction. Mobile support in Wails v3 is explicitly experimental — trust <code>wails3 doctor</code> + the build result over doc assurances.</p>
+
+<h2>Direct answers to your exact questions</h2>
+<table>
+  <tr><th>Your question</th><th>Answer</th><th>Basis</th></tr>
+  <tr><td>Would an intermediate PWA hinder the goal?</td><td>Not seriously — but only manifest+icons is cheap; the <i>substantive</i> PWA work is wasted or conflicts with Wails.</td><td>table in section 2</td></tr>
+  <tr><td>Is it simple to "just use the sqlite3 database stuff as it is"?</td><td><b>Yes.</b> Pure-Go driver, file-based, compiles into the same shared lib. Only the db path moves.</td><td>step 3</td></tr>
+  <tr><td>Is a PWA install on your domain useless unless SQLite works in-browser?</td><td><b>Correct.</b> A PWA today caches the shell but not the data; with daily-reset server storage, install buys nothing useful.</td><td>section 1</td></tr>
+</table>
+
+<h2>Deliberately left out (and what to read next)</h2>
+<ul>
+  <li>iOS port, Play Store compliance (target-API levels, signing pipeline beyond <code>versionCode</code>) — out of scope, Android-only as you specified.</li>
+  <li>Multi-device sync of flashcard data — orthogonal to this port; would live in <code>internal/store</code> not the Wails layer.</li>
+  <li>For the full details, read <code>WAILS_MIGRATION.md</code> in the repo root (written earlier today, this artifact is its visual remix).</li>
+</ul>
+
+<div class="box verdict winner">
+  <p>Recommendation: <b>skip the PWA entirely, go straight to Wails3 Android.</b></p>
+  <p class="footnote">PWA = hour of throwaway shim for app-like-on-domain; Wails = real APK, real SQLite, real offline.</p>
+  <div class="stamps">
+    <span class="badge ok">PWA: ditched — confirmed in review</span>
+    <span class="badge ok">Wails3 Android: go</span>
+    <span class="badge warn">2 [VERIFY] gates on-device</span>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

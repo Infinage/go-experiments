@@ -93,7 +93,7 @@
                 $gradedIds.push({{$.Card.ID}});
                 $reviewed = $reviewed + 1;
                 $grade = '{{$g.Value}}';
-                @post('/study/{{$.Card.ID}}/grade')"
+                @get('/study/{{$.Card.ID}}/grade')"
               type="button"
             >
               <span
@@ -189,9 +189,10 @@
           {{end}}
           <div class="flex flex-wrap gap-2 justify-center mt-2">
             {{if eq .Stats.Total 0}}
-              <form action="/seed" method="post">
-                <button class="btn-sun" type="submit">Add sample cards</button>
-              </form>
+              <button
+                class="btn-sun"
+                data-on:click="@get('/seed')"
+                type="button">Add sample cards</button>
             {{else if not .Force}}
               <button
                 class="btn-sun"
@@ -229,7 +230,7 @@
     data-attr:disabled="$anyBusy"
     data-indicator:busy-reset
     data-on:click="$reviewed = 0; $gradedIds = []; $requeuedIds = [];
-      $droppedIds = []; @post('/study/reset')"
+      $droppedIds = []; @get('/study/reset')"
     data-show="$confirm"
     style="display: none;
            background: var(--color-rose)"

@@ -2,11 +2,13 @@ package web
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"image"
 	"image/png"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -24,36 +26,26 @@ func pngBytes(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-// multipartBody builds a POST body with text fields plus files.
-func multipartBody(t *testing.T, files map[string][]byte) (
-	string, *bytes.Buffer) {
-	t.Helper()
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	if err := w.WriteField("front", "q"); err != nil {
-		t.Fatal(err)
+// sigSave posts a card save with base64 media, the way formmedia.js
+// delivers it (signals on the query string).
+func sigSave(h http.Handler, fields map[string]string, files map[string][]byte) *httptest.ResponseRecorder {
+	sig := map[string]any{}
+	for k, v := range fields {
+		sig[k] = v
 	}
-	if err := w.WriteField("back", "a"); err != nil {
-		t.Fatal(err)
+	for k, data := range files {
+		sig[k] = []fileSignal{{
+			Name:     "upload",
+			Contents: base64.StdEncoding.EncodeToString(data),
+		}}
 	}
-	for field, data := range files {
-		fw, err := w.CreateFormFile(field, "upload")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := fw.Write(data); err != nil {
-			t.Fatal(err)
-		}
+	raw, err := json.Marshal(sig)
+	if err != nil {
+		panic(err)
 	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return w.FormDataContentType(), &buf
-}
-
-func postMultipart(h http.Handler, path, ctype string, body *bytes.Buffer) *httptest.ResponseRecorder {
-	req := httptest.NewRequest("POST", path, body)
-	req.Header.Set("Content-Type", ctype)
+	req := httptest.NewRequest("GET", "/cards/save", nil)
+	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(string(raw))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
@@ -61,10 +53,10 @@ func postMultipart(h http.Handler, path, ctype string, body *bytes.Buffer) *http
 
 func TestUploadImageSaves(t *testing.T) {
 	h, db := realHandler(t)
-	ctype, body := multipartBody(t, map[string][]byte{
-		"front_image": pngBytes(t),
-	})
-	if rec := postMultipart(h, "/cards/save", ctype, body); rec.Code != 303 {
+	rec := sigSave(h, map[string]string{
+		"front": "q", "back": "a",
+	}, map[string][]byte{"imgData": pngBytes(t)})
+	if rec.Code != 200 {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
 	cs, _ := db.Cards("", "", "")
@@ -77,7 +69,7 @@ func TestUploadImageSaves(t *testing.T) {
 	}
 
 	// The media endpoint serves it with ETag and Range support.
-	rec := get(h, "/cards/"+itoa(cs[0].ID)+"/media/image")
+	rec = get(h, "/cards/"+itoa(cs[0].ID)+"/media/image")
 	if rec.Code != 200 || !strings.HasPrefix(
 		rec.Header().Get("Content-Type"), "image/png") {
 		t.Fatalf("media: %d %s", rec.Code, rec.Header().Get("Content-Type"))
@@ -107,21 +99,23 @@ func TestUploadRejectsBadContent(t *testing.T) {
 		files map[string][]byte
 		want  string
 	}{
-		{"text as image", map[string][]byte{"front_image": []byte("hello")}, "unsupported image"},
-		{"text as audio", map[string][]byte{"front_audio": []byte("hello")}, "unsupported audio"},
+		{"text as image", map[string][]byte{"imgData": []byte("hello")}, "unsupported"},
+		{"text as audio", map[string][]byte{"audData": []byte("hello")}, "unsupported"},
 	}
 	for _, tc := range cases {
-		ctype, body := multipartBody(t, tc.files)
-		rec := postMultipart(h, "/cards/save", ctype, body)
+		rec := sigSave(h, map[string]string{
+			"front": "q", "back": "a",
+		}, tc.files)
 		if rec.Code != 400 || !strings.Contains(rec.Body.String(), tc.want) {
 			t.Errorf("%s: %d %s", tc.name, rec.Code, rec.Body.String())
 		}
 	}
 	// Oversized image: just over the limit.
 	big := bytes.Repeat(pngBytes(t), 80000) // > 5 MB of valid PNG
-	ctype, body := multipartBody(t, map[string][]byte{"front_image": big})
-	if rec := postMultipart(h, "/cards/save", ctype, body); rec.Code != 400 ||
-		!strings.Contains(rec.Body.String(), "limit") {
+	rec := sigSave(h, map[string]string{
+		"front": "q", "back": "a",
+	}, map[string][]byte{"imgData": big})
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), "limit") {
 		t.Errorf("oversize: %d %s", rec.Code, rec.Body.String())
 	}
 }

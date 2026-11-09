@@ -2,16 +2,16 @@ package web
 
 import (
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
 
 func TestGradeResetsFlipSignal(t *testing.T) {
 	h, _ := realHandler(t)
-	req := httptest.NewRequest("POST", "/study/1/grade",
-		strings.NewReader(`{"grade": "good", "idx": 0}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("GET", "/study/1/grade", nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(`{"grade": "good", "idx": 0}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), `"revealed": false`) {
@@ -21,10 +21,9 @@ func TestGradeResetsFlipSignal(t *testing.T) {
 
 func TestResetProgressEndpoint(t *testing.T) {
 	h, db := realHandler(t)
-	req := httptest.NewRequest("POST", "/study/reset",
-		strings.NewReader(`{"category": ""}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("GET", "/study/reset", nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(`{"category": ""}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 200 {

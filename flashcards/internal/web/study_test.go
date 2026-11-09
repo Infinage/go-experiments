@@ -33,10 +33,9 @@ func TestStudyPageShowsDueCard(t *testing.T) {
 func TestGradeCardFlow(t *testing.T) {
 	h, db := realHandler(t)
 	// The frontend posts JSON signals with the grade merged in.
-	req := httptest.NewRequest("POST", "/study/1/grade",
-		strings.NewReader(`{"grade": "good"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("GET", "/study/1/grade", nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(`{"grade": "good"}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 200 ||
@@ -54,9 +53,8 @@ func TestGradeCardFlow(t *testing.T) {
 	}
 
 	// Invalid grade.
-	req = httptest.NewRequest("POST", "/study/1/grade",
-		strings.NewReader(`{"grade": "zzz"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req = httptest.NewRequest("GET", "/study/1/grade", nil)
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(`{"grade": "zzz"}`)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 400 {
@@ -67,9 +65,9 @@ func TestGradeCardFlow(t *testing.T) {
 
 func TestSeedOnlyWhenEmpty(t *testing.T) {
 	h, db := realHandler(t)
-	// DB already has a card: seeding must be a no-op redirect.
-	rec := post(h, "/seed", url.Values{})
-	if rec.Code != 303 {
+	// DB already has a card: seeding must be a no-op (SSE re-render).
+	rec := sigGet(h, "/seed", "")
+	if rec.Code != 200 {
 		t.Fatalf("seed non-empty: %d", rec.Code)
 	}
 	cs, _ := db.Cards("", "", "")
@@ -78,8 +76,8 @@ func TestSeedOnlyWhenEmpty(t *testing.T) {
 	}
 	// Empty DB: seeding adds the sample set.
 	db.DeleteCard(1)
-	rec = post(h, "/seed", url.Values{})
-	if rec.Code != 303 {
+	rec = sigGet(h, "/seed", "")
+	if rec.Code != 200 {
 		t.Fatalf("seed: %d", rec.Code)
 	}
 	cs, _ = db.Cards("", "", "")

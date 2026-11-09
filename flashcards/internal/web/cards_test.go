@@ -31,19 +31,26 @@ func realHandler(t *testing.T) (http.Handler, *store.Store) {
 	return h, db
 }
 
+// postForm fields are sent as urlencoded form POST.
 func post(h http.Handler, path string, form url.Values) *httptest.ResponseRecorder {
 	return do(h, "POST", path, form)
 }
 
-// del sends ids the way Datastar does for @delete: signals in the
-// "datastar" query param (the SDK reads them from there for DELETE too).
-func del(h http.Handler, path string, _ url.Values) *httptest.ResponseRecorder {
-	sig := url.Values{"datastar": {`{"deleteIds": [1, 2]}`}}
-	req := httptest.NewRequest("DELETE", path+"?"+sig.Encode(), nil)
+// sigGet sends a datastar GET with signals in the datastar query param
+// (the GET-only transport everything uses after the Android bridge change).
+func sigGet(h http.Handler, path, signals string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("GET", path, nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(signals)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
+}
+
+// del sends ids the way Datastar does: signals in the datastar query param
+// on a GET (route /cards/delete).
+func del(h http.Handler, path string, _ url.Values) *httptest.ResponseRecorder {
+	return sigGet(h, "/cards/delete", `{"deleteIds": [1, 2]}`)
 }
 
 func do(h http.Handler, method, path string, form url.Values) *httptest.ResponseRecorder {
@@ -62,8 +69,8 @@ func do(h http.Handler, method, path string, form url.Values) *httptest.Response
 
 func TestSaveAndListFlow(t *testing.T) {
 	h, db := realHandler(t)
-	form := url.Values{"front": {"Q"}, "back": {"A"}, "category": {"web"}}
-	if rec := post(h, "/cards/save", form); rec.Code != 303 {
+	if rec := sigGet(h, "/cards/save",
+		`{"front": "Q", "back": "A", "category": "web"}`); rec.Code != 200 {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
 	cs, _ := db.Cards("", "", "")
@@ -71,12 +78,13 @@ func TestSaveAndListFlow(t *testing.T) {
 		t.Fatalf("cards after save: %+v", cs)
 	}
 	// Validation error path.
-	rec := post(h, "/cards/save", url.Values{"front": {"only front"}})
+	rec := sigGet(h, "/cards/save", `{"front": "only front"}`)
 	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "required") {
 		t.Fatalf("validation: %d %s", rec.Code, rec.Body.String())
 	}
 	// Edit updates.
-	if rec := post(h, "/cards/save", url.Values{"id": {"1"}, "front": {"Q2"}, "back": {"A2"}, "category": {""}}); rec.Code != 303 {
+	if rec := sigGet(h, "/cards/save",
+		`{"id": 1, "front": "Q2", "back": "A2", "category": ""}`); rec.Code != 200 {
 		t.Fatalf("edit save: %d", rec.Code)
 	}
 	c, _ := db.Card(1)

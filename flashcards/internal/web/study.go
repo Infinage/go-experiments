@@ -365,82 +365,34 @@ func (s *Server) resetProgress(w http.ResponseWriter, r *http.Request) {
 }
 
 // seedCards inserts a few demo cards when the database is empty, so a
-// fresh install has something to study.
+// fresh install has something to study. Datastar GET-only: patches the
+// study area over SSE instead of redirecting.
 func (s *Server) seedCards(w http.ResponseWriter, r *http.Request) {
 	st, err := s.store.Stats()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if st.Total != 0 {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	seeds := [][3]string{
-		{"What does HTML stand for?", "HyperText Markup Language", "web"},
-		{"What does CSS stand for?", "Cascading Style Sheets", "web"},
-		{"HTTP status 404 means…", "Not Found", "web"},
-		{"HTTP status 301 means…", "Moved Permanently", "web"},
-		{"Which HTML tag embeds JavaScript?", "<script>", "web"},
-		{"CSS property for rounded corners", "border-radius", "web"},
-		{"CSS display value that stacks elements side by side", "flex (or inline-flex)", "web"},
-		{"What does JSON stand for?", "JavaScript Object Notation", "web"},
-		{"Which HTTP verb is idempotent and caches?", "GET", "web"},
-		{"Meta tag for mobile viewport width", `<meta name="viewport">`, "web"},
-		{"Go keyword to launch a goroutine", "go", "langs"},
-		{"Go type for a dynamically-sized slice of bytes", "[]byte", "langs"},
-		{"Which Go construct handles concurrent receive?", "select", "langs"},
-		{"Go function that runs deferred cleanups?", "defer", "langs"},
-		{"Map type syntax in Go", "map[string]int", "langs"},
-		{"What does 'nil' mean in Go?", "The zero value of pointers, slices, maps, channels and functions", "langs"},
-		{"Which SQL clause filters rows?", "WHERE", "db"},
-		{"SQL command to change a table schema?", "ALTER TABLE", "db"},
-		{"What does JOIN do?", "Combines rows from two tables on a matching column", "db"},
-		{"SQL aggregate for counting rows?", "COUNT(*)", "db"},
-		{"Which index type full-text search uses in SQLite?", "FTS5 virtual table", "db"},
-		{"What is a database transaction?", "A group of operations applied all-or-nothing", "db"},
-		{"Capital of Australia?", "Canberra", "geography"},
-		{"Capital of Canada?", "Ottawa", "geography"},
-		{"Longest river in Africa?", "The Nile", "geography"},
-		{"Largest desert on Earth?", "Antarctic Desert", "geography"},
-		{"Which country has the most time zones?", "France (12)", "geography"},
-		{"Mount Everest sits on the border of…", "Nepal and China", "geography"},
-		{"Spanish for 'Good morning'", "Buenos días", "spanish"},
-		{"Spanish for 'Thank you'", "Gracias", "spanish"},
-		{"Spanish for 'How much does it cost?'", "¿Cuánto cuesta?", "spanish"},
-		{"Spanish for 'Where is the bathroom?'", "¿Dónde está el baño?", "spanish"},
-		{"Spanish for 'I would like…'", "Me gustaría…", "spanish"},
-		{"Spanish for 'See you later'", "Hasta luego", "spanish"},
-		{"How many strings does a standard guitar have?", "Six", "music"},
-		{"Tempo marking for 'slow'", "Largo or Adagio", "music"},
-		{"What does 'forte' mean?", "Loud", "music"},
-		{"Key signature with no sharps or flats?", "C major / A minor", "music"},
-		{"Speed of light in vacuum?", "299,792,458 m/s", "science"},
-		{"Chemical symbol for gold?", "Au", "science"},
-		{"Powerhouse of the cell?", "Mitochondria", "science"},
-		{"A very long card front to test text wrapping and overflow handling in the retro card layout across desktop and mobile viewports, with several clauses and no manual line breaks anywhere in the string", "A very long card back that also needs to wrap correctly inside the mint answer face, keeping the border and padding intact while remaining fully readable on narrow phone screens as well as wide desktop panes.", "web"},
-		{"Who painted the Mona Lisa?", "Leonardo da Vinci", "art"},
-		{"Which movement was Salvador Dalí part of?", "Surrealism", "art"},
-		{"Primary colors of the RYB model?", "Red, yellow, blue", "art"},
-		{"Who wrote 'One Hundred Years of Solitude'?", "Gabriel García Márquez", "books"},
-		{"Author of the 'Discworld' series?", "Terry Pratchett", "books"},
-		{"In which year did the Berlin Wall fall?", "1989", "history"},
-		{"Who was the first emperor of Rome?", "Augustus", "history"},
-		{"The Industrial Revolution began in which country?", "Great Britain", "history"},
-		{"Main ingredient of guacamole?", "Avocado", "cooking"},
-		{"What is 'umami'?", "The savoury basic taste", "cooking"},
-		{"Which film won the first Academy Award for Best Picture?", "Wings (1929)", "movies"},
-		{"Who directed 'Inception'?", "Christopher Nolan", "movies"},
-		{"How often are the Summer Olympics held?", "Every four years", "sports"},
-		{"In which sport would you perform a slam dunk?", "Basketball", "sports"},
-		{"What does DNA stand for?", "Deoxyribonucleic acid", "science"},
-		{"Speed of a sneeze can exceed…", "160 km/h", "science"},
-	}
-	for _, c := range seeds {
-		if _, err := s.store.CreateCard(c[0], c[1], c[2]); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+	if st.Total == 0 {
+		for _, c := range SampleCards() {
+			if _, err := s.store.CreateCard(c[0], c[1], c[2]); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	var sig studySignals
+	if err := datastar.ReadSignals(r, &sig); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	d, err := s.studyData(sig)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sse := datastar.NewSSE(w, r)
+	if err := sse.PatchElements(s.templateHTML("study-area", d)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

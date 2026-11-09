@@ -14,10 +14,9 @@ import (
 func gradePost(t *testing.T, h http.Handler, cardID int64,
 	signals string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest("POST", fmt.Sprintf("/study/%d/grade", cardID),
-		strings.NewReader(signals))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("GET", fmt.Sprintf("/study/%d/grade", cardID), nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(signals)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
@@ -188,10 +187,9 @@ func TestCaughtUpTotalNotZero(t *testing.T) {
 	db.CreateCard("q2", "a2", "web")
 	// The caught-up page would have seeded nothing due; simulate the
 	// reset click with pass state reset client-side.
-	req := httptest.NewRequest("POST", "/study/reset",
-		strings.NewReader(`{"category": ""}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("GET", "/study/reset", nil)
 	req.Header.Set("Datastar-Request", "true")
+	req.URL.RawQuery = "datastar=" + url.QueryEscape(`{"category": ""}`)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != 200 {

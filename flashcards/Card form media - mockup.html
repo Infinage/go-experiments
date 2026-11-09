@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card form media — mockup (variation A)</title>
+<link href="https://fonts.googleapis.com/css?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--
+  Variation A from the side-by-side comparison (sideshow post "Card form — front media picker: 3 variations").
+  Media section: "Prompt type" row + attached panel — one big pill per kind (Image / Audio),
+  a panel below with Upload / Camera actions, dashed empty state, and a picked state
+  (image thumbnail / audio player with waveform, Replace + Remove). Recording state shows
+  a pulsing red dot with a timer, Stop and Cancel.
+  Live demo: click the kind pills, Upload/Camera/Record/Remove/Replace to walk the states.
+-->
+<style>
+  :root { --ink:#2B1208; --cream:#F7F3EC; --sun:#FFC93C; --pink:#FF8AE2; --lav:#94A9F0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Poppins, sans-serif; color: var(--ink); background: var(--cream);
+         display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 24px 16px 48px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .sp { justify-content: space-between; }
+  .bx { border: 2px solid var(--ink); border-radius: 16px; background: #fff; box-shadow: 4px 4px 0 var(--ink); }
+  .bt { font: 600 13px Poppins, sans-serif; color: var(--ink); border: 2px solid var(--ink); border-radius: 999px;
+        padding: 10px 18px; min-height: 44px; background: #fff; box-shadow: 2px 2px 0 var(--ink);
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+  .bt:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--ink); }
+  .bt.y { background: var(--sun); }
+  .bt.sm { min-height: 34px; padding: 4px 13px; font-size: 12px; }
+  .lg { width: 30px; height: 30px; border-radius: 50%; background: var(--sun); border: 2px solid var(--ink); }
+  .lb { font-weight: 600; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+  .in { font: 500 14px Poppins, sans-serif; border: 2px solid var(--ink); border-radius: 999px; padding: 11px 16px;
+        width: 100%; background: #fff; outline: none; }
+  textarea.in { border-radius: 18px; resize: none; }
+  .muted { opacity: .6; font-size: 12px; }
+  .svg-ic { width: 15px; height: 15px; flex: none; }
+
+  .screen { width: 1200px; max-width: 100%; padding: 28px 40px; display: flex; flex-direction: column; gap: 18px; }
+  .cols { display: flex; align-items: stretch; gap: 20px; flex: 1; }
+  .formcol { flex: 1; display: flex; flex-direction: column; }
+  .sidecol { width: 330px; flex: none; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- media section (variation A) ---------- */
+  .a-kind { display: flex; gap: 8px; flex-wrap: wrap; }
+  .a-kind .bt { background: #fff; }
+  .a-kind .bt.on { background: var(--pink); }
+  .a-panel { margin-top: 4px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .a-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .a-empty { border: 2px dashed rgba(43,18,8,.45); border-radius: 12px; padding: 18px; text-align: center; }
+  .a-empty svg { width: 26px; height: 26px; display: block; margin: 0 auto 4px; }
+  .a-picked { display: flex; gap: 12px; align-items: center; }
+  .a-thumb { width: 96px; height: 72px; border: 2px solid var(--ink); border-radius: 10px; flex: none;
+             box-shadow: 2px 2px 0 var(--ink); background: var(--lav); object-fit: cover; }
+  .a-filemeta { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+  .a-filename { font-weight: 600; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wf { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 16px; }
+  .wf i { width: 3px; border-radius: 2px; background: var(--ink); opacity: .8; }
+  .dur { font-size: 11px; font-weight: 600; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px 8px; background: #fff; }
+  .rec { display: none; align-items: center; gap: 12px; }
+  .recording .rec { display: flex; }
+  .recording .a-actions { display: none; }
+  .recdot { width: 12px; height: 12px; border-radius: 50%; background: #E5484D; animation: p 1s infinite; }
+  @keyframes p { 50% { opacity: .3; } }
+  .rectime { font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .playbtn { width: 34px; height: 34px; flex: none; border-radius: 50%; border: 2px solid var(--ink);
+             background: var(--sun); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  .preview-flip { height: 170px; border-radius: 12px; background: var(--lav); display: flex; align-items: center;
+                  justify-content: center; text-align: center; padding: 16px; font-weight: 700; font-size: 20px; }
+
+  @media (max-width: 900px) {
+    .cols { flex-direction: column; }
+    .sidecol { width: 100%; }
+    .screen { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="row sp" style="width:1200px;max-width:100%">
+  <div class="row"><span class="lg"></span><b style="font-size:20px">Flashcard</b></div>
+  <span class="muted">Media upload redesign — variation A · live demo</span>
+</div>
+
+<div class="bx screen">
+  <div class="row sp" style="gap:20px;flex:1">
+    <div class="bx formcol">
+      <b style="font-size:18px;padding:16px 18px;border-bottom:2px solid var(--ink)">New Card</b>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+
+        <label class="lb">Prompt
+          <input class="in" placeholder="What does HTML stand for?">
+        </label>
+
+        <!-- ============ media section (variation A) ============ -->
+        <div class="lb" style="display:block">
+          Front media
+          <div class="a-kind">
+            <button class="bt kind on" data-kind="img">
+              <svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+              Image
+            </button>
+            <button class="bt kind" data-kind="aud">
+              <svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-7h3zM3 19a2 2 0 0 0 2 2h1v-7H3z"/></svg>
+              Audio
+            </button>
+          </div>
+        </div>
+
+        <!-- image panel -->
+        <div class="a-panel bx" data-kindpanel="img" style="margin-top:0">
+          <div class="a-actions">
+            <button class="bt sm" data-pick><svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Upload</button>
+            <button class="bt sm" data-pick><svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Camera</button>
+            <span class="muted">PNG/JPEG/WebP/GIF &middot; max 5 MB</span>
+          </div>
+          <div class="a-empty" data-empty>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/><path d="M12 3v3M12 18v3"/></svg>
+            <b style="font-size:13px">Add a picture to the front</b><br>
+            <span class="muted">Browse or drop an image — camera opens the phone camera</span>
+          </div>
+          <div class="a-picked" data-picked style="display:none">
+            <img class="a-thumb" alt="" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='72'><rect width='96' height='72' fill='%2394A9F0'/><circle cx='24' cy='22' r='9' fill='%23FFC93C'/><path d='M0 58 L30 34 L52 50 L72 38 L96 54 L96 72 L0 72 Z' fill='%2359C08F'/></svg>">
+            <div class="a-filemeta">
+              <span class="a-filename">lake-heron.jpg</span>
+              <span class="muted">148 KB</span>
+              <div class="row" style="gap:6px">
+                <button class="bt sm y" data-shake>Replace</button>
+                <button class="bt sm" data-unpick>Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- audio panel -->
+        <div class="a-panel bx" data-kindpanel="aud" style="display:none;margin-top:0">
+          <div class="a-actions">
+            <button class="bt sm" data-pick><svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Upload</button>
+            <button class="bt sm" data-record><svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg> Record</button>
+            <span class="muted">MP3/WAV/OGG &middot; max 10 MB</span>
+          </div>
+          <div class="rec">
+            <span class="recdot"></span><span class="rectime">0:00</span>
+            <button class="bt sm y" data-stoprec>Stop</button>
+            <button class="bt sm" data-cancelrec>Cancel</button>
+          </div>
+          <div class="a-empty" data-empty>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
+            <b style="font-size:13px">Add audio to the front</b><br>
+            <span class="muted">Upload a clip or record straight from here</span>
+          </div>
+          <div class="a-picked" data-picked style="display:none">
+            <button class="playbtn" data-playtoggle><svg class="svg-ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path class="picon" d="M8 5v14l11-7z"/></svg></button>
+            <div class="a-filemeta">
+              <span class="a-filename">word-pronunciation.mp3</span>
+              <span class="wf" aria-hidden="true"><i style="height:8px"></i><i style="height:14px"></i><i style="height:16px"></i><i style="height:11px"></i><i style="height:15px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:13px"></i><i style="height:16px"></i><i style="height:7px"></i><i style="height:14px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:14px"></i><i style="height:6px"></i><i style="height:14px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:13px"></i><i style="height:15px"></i><i style="height:8px"></i><i style="height:14px"></i><i style="height:11px"></i></span>
+            </div>
+            <span class="dur">0:12</span>
+            <div class="row" style="gap:6px;flex:none">
+              <button class="bt sm y" data-shake>Replace</button>
+              <button class="bt sm" data-unpick>Remove</button>
+            </div>
+          </div>
+        </div>
+        <!-- ============ /media section ============ -->
+
+        <label class="lb">Answer
+          <textarea class="in" rows="3" placeholder="HyperText Markup Language" style="max-width:100%"></textarea>
+        </label>
+
+        <div class="row" style="align-items:flex-end">
+          <label class="lb" style="flex:1">Category
+            <input class="in" placeholder="General" list="cats">
+            <datalist id="cats"><option>Language</option><option>General</option><option>Science</option></datalist>
+          </label>
+          <button class="bt y" style="flex:1">
+            <svg class="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Add Card
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidecol">
+      <div class="bx" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <b>Live preview</b>
+        <div class="preview-flip">What does HTML stand for?</div>
+        <span style="font-size:12px">Answer: HyperText Markup Language</span>
+      </div>
+      <div class="bx" style="padding:16px;font-size:12px;background:var(--sun)">
+        Tip: keep the category filled in to add cards in bulk — it stays selected after each add.
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="muted" style="max-width:720px;text-align:center">
+  Variation A — "Prompt type" row + attached panel. Click the kind pills to switch Image / Audio;
+  Upload / Camera / Record walk through empty &rarr; picked &rarr; recording states;
+  Replace shakes the preview; Remove returns to the empty state.
+</p>
+
+<script>
+(function () {
+  var root = document;
+  // kind switching
+  root.querySelectorAll('.kind').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      root.querySelectorAll('.kind').forEach(function (b) { b.classList.toggle('on', b === btn); });
+      var kind = btn.getAttribute('data-kind');
+      root.querySelectorAll('[data-kindpanel]').forEach(function (el) {
+        el.style.display = (el.getAttribute('data-kindpanel') === kind) ? '' : 'none';
+      });
+    });
+  });
+  function frame(el) { return el.closest('[data-kindpanel]'); }
+  function pick(panel) {
+    panel.querySelector('[data-empty]').style.display = 'none';
+    panel.querySelector('[data-picked]').style.display = '';
+    panel.classList.remove('recording');
+  }
+  function unpick(panel) {
+    panel.querySelector('[data-empty]').style.display = '';
+    panel.querySelector('[data-picked]').style.display = 'none';
+    panel.classList.remove('recording');
+  }
+  root.querySelectorAll('[data-pick]').forEach(function (b) {
+    b.addEventListener('click', function () { pick(frame(b)); });
+  });
+  root.querySelectorAll('[data-unpick]').forEach(function (b) {
+    b.addEventListener('click', function () { unpick(frame(b)); });
+  });
+  var timers = {};
+  root.querySelectorAll('[data-record]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var panel = frame(b);
+      panel.classList.add('recording');
+      panel.querySelector('[data-empty]').style.display = 'none';
+      panel.querySelector('[data-picked]').style.display = 'none';
+      var t = 0, el = panel.querySelector('.rectime');
+      clearInterval(timers.q);
+      timers.q = setInterval(function () { t++; el.textContent = '0:' + String(t % 60).padStart(2, '0'); }, 1000);
+    });
+  });
+  root.querySelectorAll('[data-stoprec]').forEach(function (b) {
+    b.addEventListener('click', function () { clearInterval(timers.q); pick(frame(b)); });
+  });
+  root.querySelectorAll('[data-cancelrec]').forEach(function (b) {
+    b.addEventListener('click', function () { clearInterval(timers.q); unpick(frame(b)); });
+  });
+  root.querySelectorAll('[data-playtoggle]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var path = b.querySelector('.picon');
+      path.setAttribute('d', path.getAttribute('d') === 'M8 5v14l11-7z'
+        ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z');
+    });
+  });
+  root.querySelectorAll('[data-shake]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var el = b.closest('.a-picked');
+      el.animate([{ transform: 'none' }, { transform: 'translateX(-3px)' }, { transform: 'none' }], { duration: 160 });
+    });
+  });
+})();
+</script>
+</body>
+</html>

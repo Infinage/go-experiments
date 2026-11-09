@@ -40,9 +40,10 @@
       'audUrl': {{existingMediaURL .Card "audio"}},
       'statusLine': {{toSignal .StatusLine}}}"
   >
-    <form action="/cards/save" enctype="multipart/form-data" method="post">
-      <input name="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
-      <input data-bind="mediaKind" name="media_kind" type="hidden">
+    {{/* GET-only (Android asset bridge): save goes through datastar signals;
+         media files arrive as base64 via window.formMedia (formmedia.js). */}}
+    <div>
+      <input data-bind="id" type="hidden" value="{{if .Card.ID}}{{.Card.ID}}{{end}}">
       {{with .Error}}
         <p class="box p-3 text-sm mb-4">{{.}}</p>
       {{end}}
@@ -220,7 +221,7 @@
                       data-indicator:busy-del-img
                       data-on:click="$delKind = 'image'; $mediaKind = '';
                         $imgUrl = ''; $imgName = '';
-                        @post('/cards/{{.Card.ID}}/media/delete')"
+                        @get('/cards/{{.Card.ID}}/media/delete')"
                       data-show="$imgUrl && !$imgName"
                       style="display: none"
                       type="button"
@@ -236,23 +237,26 @@
                 </div>
               </div>
             </div>
+            {{/* data-bind on a file input: datastar reads the picked file
+                 into the signal as {name, contents(base64), mime}; the label
+                 shows its name. */}}
             <input
               class="sr-only"
               accept="image/png,image/jpeg,image/webp,image/gif"
-              data-on:change="$imgUrl = evt.target.files.length
-                ? URL.createObjectURL(evt.target.files[0])
-                : ''; $imgName = evt.target.files[0]?.name || ''"
+              data-bind="imgData"
+              data-on:change="$imgName = ($imgData?.length && $imgData[0].name)
+                || ($imgUrl && $imgName) || ''"
               name="front_image"
               type="file"
             >
             <input
-              id="front-image-camera"
               class="sr-only"
+              id="front-image-camera"
               accept="image/*"
               capture="environment"
-              data-on:change="$imgUrl = evt.target.files.length
-                ? URL.createObjectURL(evt.target.files[0])
-                : ''; $imgName = evt.target.files[0]?.name || ''"
+              data-bind="imgData"
+              data-on:change="$imgName = ($imgData?.length && $imgData[0].name)
+                || ($imgUrl && $imgName) || ''"
               name="front_image_camera"
               type="file"
             >
@@ -267,11 +271,11 @@
             <input
               id="front-audio-input"
               class="sr-only"
-              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
-              data-on:change="$audUrl = evt.target.files.length
-                ? URL.createObjectURL(evt.target.files[0])
-                : ''; $audName = evt.target.files[0]?.name || ''"
               name="front_audio"
+              accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,audio/webm"
+              data-bind="audData"
+              data-on:change="$audName = ($audData?.length && $audData[0].name)
+                || ($audUrl && $audName) || ''"
               type="file"
             >
             <div
@@ -378,7 +382,7 @@
                       data-indicator:busy-del-aud
                       data-on:click="$delKind = 'audio'; $mediaKind = '';
                         $audUrl = ''; $audName = '';
-                        @post('/cards/{{.Card.ID}}/media/delete')"
+                        @get('/cards/{{.Card.ID}}/media/delete')"
                       data-show="$audUrl && !$audName"
                       style="display: none"
                       type="button"
@@ -397,11 +401,14 @@
           </div>
         </fieldset>
         <div class="flex gap-2">
-          <button class="btn-sun" type="submit">Save</button>
+          <button
+            class="btn-sun"
+            data-on:click="@get('/cards/save')"
+            type="button">Save</button>
           <a class="btn bg-white" href="/cards">Cancel</a>
         </div>
       </div>
-    </form>
+  </div>
 
   {{/* Live camera overlay (desktop); camera.js drives it and falls back
        to the capture input on phones. Its #camera-video preview is
@@ -459,7 +466,7 @@
             class="btn bg-white min-h-8"
             data-attr:disabled="$anyBusy"
             data-indicator:busy-reset-status
-            data-on:click="@post('/cards/{{.Card.ID}}/status/reset')"
+            data-on:click="@get('/cards/{{.Card.ID}}/status/reset')"
             type="button"
           >
             <span
@@ -485,7 +492,7 @@
       class="btn bg-white min-h-8"
       data-attr:disabled="$anyBusy"
       data-indicator:busy-reset-status
-      data-on:click="@post('/cards/{{.ID}}/status/reset')"
+      data-on:click="@get('/cards/{{.ID}}/status/reset')"
       type="button"
     >
       <span

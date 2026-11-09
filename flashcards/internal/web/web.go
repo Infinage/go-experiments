@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/infinage/go-experiments/flashcards/internal/store"
 )
@@ -118,19 +119,32 @@ func New(db *store.Store, assets fs.FS) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(assets)))
+	// The Wails asset server requests "/index.html" for the webview URL "/" —
+	// the {$}-anchored studyPage route only matches the bare "/" path.
+	mux.HandleFunc("GET /index.html", s.studyPage)
 	mux.HandleFunc("GET /{$}", s.studyPage)
-	mux.HandleFunc("POST /study/{id}/grade", s.gradeCard)
-	mux.HandleFunc("POST /study/reset", s.resetProgress)
-	mux.HandleFunc("POST /seed", s.seedCards)
+	// Everything runs over GET: the Android webview asset bridge rejects
+	// request bodies, so one code path serves desktop and mobile alike —
+	// datastar signals ride the query string.
+	mux.HandleFunc("GET /study/{id}/grade", s.gradeCard)
+	mux.HandleFunc("GET /study/reset", s.resetProgress)
+	mux.HandleFunc("GET /seed", s.seedCards)
 	mux.HandleFunc("GET /cards", s.cardsPage)
 	mux.HandleFunc("GET /cards/new", s.newCard)
-	mux.HandleFunc("POST /cards/save", s.saveCard)
+	mux.HandleFunc("GET /cards/save", s.saveCard)
 	mux.HandleFunc("GET /cards/{id}/edit", s.editCard)
 	mux.HandleFunc("GET /cards/{id}/media/{kind}", s.cardMedia)
-	mux.HandleFunc("POST /cards/{id}/media/delete", s.deleteMedia)
-	mux.HandleFunc("POST /cards/{id}/status/reset", s.resetCardStatus)
-	mux.HandleFunc("DELETE /cards", s.deleteCards)
-	return mux, nil
+	mux.HandleFunc("GET /cards/{id}/media/delete", s.deleteMedia)
+	mux.HandleFunc("GET /cards/{id}/status/reset", s.resetCardStatus)
+	mux.HandleFunc("GET /cards/delete", s.deleteCards)
+	// GET now carries mutations, so nothing dynamic may be served from any
+	// intermediary or browser cache. Static assets keep their own headers.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		mux.ServeHTTP(w, r)
+	}), nil
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {

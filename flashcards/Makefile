@@ -1,4 +1,9 @@
-.PHONY: dev build build-pi test css
+.PHONY: dev build build-pi test css apk apk-run apk-logs apk-go-log apk-push-db apk-clean
+
+# Task runner dependency — no global install required:
+#   Go 21+ and the repo's go.mod pin go-task, so `go run` resolves it locally
+#   (after the normal `go mod download` any Go build already needs).
+TASK := go run github.com/go-task/task/v3/cmd/task
 
 dev:
 	@$(MAKE) -j2 watch-css watch-go
@@ -21,3 +26,23 @@ build-pi:
 
 test:
 	go test ./...
+
+# ---------- Android (device build + install; requires toolchain setup, see README) ----------
+
+apk:
+	@$(TASK) apk:build
+
+apk-run:
+	@$(TASK) apk:run:device
+
+apk-logs:
+	@$(TASK) apk:logs
+
+apk-go-log:
+	@$(TASK) apk:go-log
+
+apk-push-db:
+	@$(TASK) apk:push:db
+
+apk-clean:
+	@$(TASK) clean

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -178,11 +179,36 @@ func (s *Server) editCard(w http.ResponseWriter, r *http.Request) {
 		Preview: previewCardFlip(c.Front, c.Back, c)})
 }
 
+// fileSignal is one file picked via data-bind on a file input: datastar
+// reads the file as data URL and ships {name, contents (base64), mime}.
+type fileSignal struct {
+	Name     string `json:"name"`
+	Contents string `json:"contents"` // base64, no data: prefix
+	Mime     string `json:"mime"`
+}
+
+// saveSignals holds the card-form save, submitted via datastar GET
+// (signals on the query string — the Android webview asset bridge rejects
+// request bodies). Media arrives as base64 arrays from data-bind.
+type saveSignals struct {
+	ID        any          `json:"id"` // bind on a hidden input yields a string
+	Front     string       `json:"front"`
+	Back      string       `json:"back"`
+	Category  string       `json:"category"`
+	MediaKind string       `json:"mediaKind"`
+	ImgData   []fileSignal `json:"imgData"`
+	AudData   []fileSignal `json:"audData"`
+}
+
 func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
-	// multipart parsing happens lazily inside the media readers below.
-	front := strings.TrimSpace(r.FormValue("front"))
-	back := strings.TrimSpace(r.FormValue("back"))
-	category := strings.TrimSpace(r.FormValue("category"))
+	var sig saveSignals
+	if err := datastar.ReadSignals(r, &sig); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	front := strings.TrimSpace(sig.Front)
+	back := strings.TrimSpace(sig.Back)
+	category := strings.TrimSpace(sig.Category)
 
 	d := cardFormData{Front: front, Back: back, Category: category,
 		Preview: previewCardFlip(front, back, store.Card{})}
@@ -194,13 +220,20 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	if idStr := r.FormValue("id"); idStr != "" {
-		var err error
-		id, err = strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
-			return
+	switch v := sig.ID.(type) {
+	case float64:
+		id = int64(v)
+	case string:
+		if v != "" {
+			var err error
+			id, err = strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				http.Error(w, "bad id", http.StatusBadRequest)
+				return
+			}
 		}
+	}
+	if id != 0 {
 		if err := s.store.UpdateCard(id, front, back, category); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -214,40 +247,39 @@ func (s *Server) saveCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.saveMedia(r, id); err != nil {
+	if err := s.saveMediaSignals(sig, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if isDatastarRequest(r) {
+		// Datastar GET: respond with a redirect-style round-trip by patching
+		// the cards list shell? The page navigates client-side on datastar,
+		// so just confirm and let the client follow its own redirect.
+		w.Header().Set("X-Flashcards-Saved", strconv.FormatInt(id, 10))
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, "/cards", http.StatusSeeOther)
 }
 
-// saveMedia stores the card-front media, enforcing image-XOR-audio: a
-// card may carry an image or audio, never both. The form's media_kind
-// field drives the cleanup of the unselected type.
-func (s *Server) saveMedia(r *http.Request, id int64) error {
-	image, err := readUpload(r, "front_image", "image")
+// saveMediaSignals stores the card-front media from base64 signal data,
+// enforcing image-XOR-audio: a card may carry an image or audio, never
+// both. mediaKind drives the cleanup of the unselected type.
+func (s *Server) saveMediaSignals(sig saveSignals, id int64) error {
+	image, err := mediaFromSignals(sig.ImgData, "image", maxImageBytes)
 	if err != nil {
 		return err
 	}
-	if image.Bytes == nil {
-		// Camera capture input (mobile "Take photo").
-		image, err = readUpload(r, "front_image_camera", "image")
-		if err != nil {
-			return err
-		}
-	}
-	audio, err := readUpload(r, "front_audio", "audio")
+	audio, err := mediaFromSignals(sig.AudData, "audio", maxAudioBytes)
 	if err != nil {
 		return err
 	}
-
 	clearErr := func(err error) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return nil
 		}
 		return err
 	}
-	kind := r.FormValue("media_kind")
 	switch {
 	case image.Bytes != nil:
 		if err := s.store.SetImage(id, image); err != nil {
@@ -259,17 +291,45 @@ func (s *Server) saveMedia(r *http.Request, id int64) error {
 			return err
 		}
 		return clearErr(s.store.ClearImage(id))
-	case kind == "image":
+	case sig.MediaKind == "image":
 		return clearErr(s.store.ClearAudio(id))
-	case kind == "audio":
+	case sig.MediaKind == "audio":
 		return clearErr(s.store.ClearImage(id))
 	default:
-		// No media selected: clear whatever was there.
 		if err := clearErr(s.store.ClearImage(id)); err != nil {
 			return err
 		}
 		return clearErr(s.store.ClearAudio(id))
 	}
+}
+
+// mediaFromSignals turns the picked files from a data/bind file input
+// (datastar ships {name, contents base64, mime}) into store.Media with a
+// size cap, sniffing the real content type.
+func mediaFromSignals(files []fileSignal, kind string, limit int) (store.Media, error) {
+	if len(files) == 0 || files[0].Contents == "" {
+		return store.Media{}, nil
+	}
+	f := files[0]
+	b, err := base64.StdEncoding.DecodeString(f.Contents)
+	if err != nil {
+		return store.Media{}, err
+	}
+	if len(b) > limit {
+		return store.Media{}, errTooLarge(kind, limit)
+	}
+	m, err := store.Media{Bytes: b, Mime: sniffMime(b)}, sniffCheck(b, kind)
+	return m, err
+}
+
+// sniffCheck validates the sniffed type against the accepted media sets
+// (mirrors readUpload's enforcement).
+func sniffCheck(b []byte, kind string) error {
+	m := sniffMime(b)
+	if _, ok := sniffed[m]; !ok {
+		return errors.New("unsupported " + kind + " type " + m)
+	}
+	return nil
 }
 
 func (s *Server) deleteCards(w http.ResponseWriter, r *http.Request) {
