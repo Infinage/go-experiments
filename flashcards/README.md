@@ -159,6 +159,11 @@ old WAL over a replaced main db would resurrect pre-seed data.
 
 ## Layout
 
+- `WAILS_ANDROID_NOTES.md` — every Android/Wails quirk we hit (SSE over
+  the JNI bridge, query stripping, redirects, file chooser, NDK
+  cross-build), root causes and fixes, and what it cost. Read before
+  touching the Android shell.
+
     internal/store    SQLite access + migrations (PRAGMA user_version)
     internal/srs      SM-2 scheduling (pure, unit tested)
     internal/web      handlers, Datastar SSE, templates (embedded)
