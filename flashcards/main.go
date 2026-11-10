@@ -19,6 +19,12 @@ import (
 //go:embed assets
 var assets embed.FS
 
+// assetHandler is the web handler handed to the Wails asset server on
+// Android; android_jni.go's nativeServeAssetFull drives it directly so the
+// Java layer gets the real status/Content-Type (wails' own serveAsset drops
+// headers and guesses MIME from file extension). Nil on desktop only.
+var assetHandler http.Handler
+
 func main() {
 	// http.FileServer has no built-in type for web app manifests.
 	mime.AddExtensionType(".webmanifest", "application/manifest+json")
@@ -35,6 +41,11 @@ func main() {
 		// Fresh installs create the app dirs lazily; SQLite does not create
 		// parent dirs itself (SQLITE_CANTOPEN 14 otherwise).
 		os.MkdirAll("/data/data/com.infinage.flashcards/files", 0o755)
+		// os.TempDir() defaults to /data/local/tmp on Android, which is adb-shell
+		// territory and not app-writable — media staging (newStaging) must live in
+		// the app-private cache dir instead.
+		os.MkdirAll("/data/data/com.infinage.flashcards/cache", 0o700)
+		os.Setenv("TMPDIR", "/data/data/com.infinage.flashcards/cache")
 		if f, err := os.OpenFile(
 			"/data/data/com.infinage.flashcards/cache/flashcards-go.log",
 			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644,
@@ -64,6 +75,7 @@ func main() {
 		// Android has no app-visible ports: hand the web handler to the Wails
 		// asset server and drive the webview event loop instead of blocking in
 		// http.ListenAndServe.
+		assetHandler = h // visible to android_jni.go for nativeServeAssetFull
 		app := application.New(application.Options{
 			Name:   "flashcards",
 			Assets: application.AssetOptions{Handler: h},

@@ -90,11 +90,13 @@
       pending.delete(input);
       // Surface WHY the mic refused so mobile failures are diagnosable
       // from the button itself; leave it enabled to allow a quick retry.
-      btn.textContent =
+      const friendly =
         err?.name === "NotAllowedError" ? "Mic blocked — allow in site settings"
         : err?.name === "NotReadableError" ? "Mic busy — close other apps"
         : err?.name === "NotFoundError" ? "No microphone found"
         : "Mic unavailable";
+      btn.textContent = friendly + " [" + (err?.message || "?").slice(0, 80) + "]";
+      if (typeof console !== "undefined") console.warn("getUserMedia failed", err);
     });
   }
 

@@ -56,6 +56,28 @@
                   type="button"
                 >Audio</button>
               </div>
+              {{$stat := .Status}}
+              <div class="relative">
+                <select
+                  class="btn h-11 appearance-none pl-4 pr-9 bg-white"
+                  data-bind="status"
+                  data-on:change="@get('/cards')"
+                >
+                  <option value="">All statuses</option>
+                  <option value="new" {{if eq $stat "new"}}selected{{end}}
+                  >Not started</option>
+                  <option value="learning"
+                    {{if eq $stat "learning"}}selected{{end}}
+                  >In progress</option>
+                  <option value="mastered"
+                    {{if eq $stat "mastered"}}selected{{end}}
+                  >Mastered</option>
+                </select>
+                <span
+                  class="pointer-events-none absolute right-3 top-1/2
+                         -translate-y-1/2 text-[10px]"
+                >▾</span>
+              </div>
               <div class="relative">
                 <select
                   class="btn h-11 appearance-none pl-4 pr-9 bg-white"
@@ -122,7 +144,7 @@
     </div>
     {{if not .Cards}}
       <div class="box p-8 text-center text-sm">
-        No cards{{if or .Query .Category .Media}}
+        No cards{{if or .Query .Category .Media .Status}}
         match your filter{{end}}.
       <a class="underline font-semibold" href="/cards/new">Add one </a>.
     </div>
@@ -132,6 +154,8 @@
       <li
         id="card-{{.ID}}"
         class="box overflow-hidden flex flex-col relative select-none"
+        data-class="{'outline outline-2 outline-ink -outline-offset-2':
+              $deleteIds.includes({{.ID}})}"
       >
         <button
           class="absolute top-2.5 right-2.5 z-10 size-5 rounded-full
@@ -145,14 +169,19 @@
                 : $deleteIds.push({{.ID}});"
           type="button"
         >✓</button>
-        <div
+        <button
           class="flex items-center justify-between gap-2 pl-3.5 pr-9 py-2
-                 border-b-2 border-ink text-[11px] font-semibold"
+                 w-full text-left border-b-2 border-ink text-[11px]
+                 font-semibold cursor-pointer"
+          data-on:click="$deleteIds.includes({{.ID}})
+                ? $deleteIds = $deleteIds.filter(i => i !== {{.ID}})
+                : $deleteIds.push({{.ID}});"
+          type="button"
           style="background: {{statusColor .Status}}"
         >
           <span>{{mediaType .}}</span>
           <span>{{statusLabel .Status}}</span>
-        </div>
+        </button>
         <div class="p-3.5 flex flex-col gap-1.5 flex-1">
           {{if .Category}}
             <span class="tag mt-1" style="background: var(--color-sun)">

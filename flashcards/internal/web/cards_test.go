@@ -73,7 +73,7 @@ func TestSaveAndListFlow(t *testing.T) {
 		`{"front": "Q", "back": "A", "category": "web"}`); rec.Code != 200 {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
-	cs, _ := db.Cards("", "", "")
+	cs, _ := db.Cards("", "", "", "")
 	if len(cs) != 2 || cs[0].Front != "Q" {
 		t.Fatalf("cards after save: %+v", cs)
 	}
@@ -97,7 +97,7 @@ func TestSaveAndListFlow(t *testing.T) {
 		!strings.Contains(rec.Body.String(), "datastar-patch-elements") {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
 	}
-	cs, _ = db.Cards("", "", "")
+	cs, _ = db.Cards("", "", "", "")
 	if len(cs) != 0 {
 		t.Fatalf("cards after delete: %d", len(cs))
 	}

@@ -89,7 +89,7 @@ func TestUploadImageSaves(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
 	}
-	cs, _ := db.Cards("", "", "")
+	cs, _ := db.Cards("", "", "", "")
 	if len(cs) != 2 || !cs[0].HasImage {
 		t.Fatalf("cards: %+v", cs)
 	}
@@ -177,7 +177,7 @@ func TestSavePicklessStagedURLIgnored(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("pick-less save: %d %s", rec.Code, rec.Body.String())
 	}
-	cs, _ := db.Cards("", "", "")
+	cs, _ := db.Cards("", "", "", "")
 	if len(cs) != 2 || cs[0].HasImage {
 		t.Fatalf("pick-less save attached media: %+v", cs)
 	}

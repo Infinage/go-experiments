@@ -97,18 +97,27 @@
           <input
             class="box px-3 h-11 bg-white outline-none font-normal"
             data-bind="category"
-            list="category-list"
             name="category"
             placeholder="e.g. web (optional)"
             spellcheck="false"
             value="{{.Category}}"
           >
-          <datalist id="category-list">
-            {{range .Categories}}
-              <option value="{{.}}"></option>
-            {{end}}
-          </datalist>
         </label>
+        {{/* Existing-category chips: tap fills the field; typing narrows
+             them. Chips live OUTSIDE the label so clicks don't refocus it
+             and the keyboard stays put. */}}
+        <div class="flex flex-wrap items-center gap-1.5">
+          {{range .Categories}}
+            <button
+              class="tag cursor-pointer whitespace-nowrap"
+              data-show="!($category || '').trim() ||
+                {{printf "%q" .}}.toLowerCase().includes(
+                  ($category || '').trim().toLowerCase())"
+              data-on:click="$category = {{printf "%q" .}}"
+              type="button"
+            >{{.}}</button>
+          {{end}}
+        </div>
 
         <fieldset class="flex flex-col gap-2 text-sm font-semibold">
           <legend>Front media <span class="font-normal text-ink/60">(optional — image or audio, not both)</span></legend>

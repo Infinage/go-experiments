@@ -70,7 +70,7 @@ func TestSeedOnlyWhenEmpty(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("seed non-empty: %d", rec.Code)
 	}
-	cs, _ := db.Cards("", "", "")
+	cs, _ := db.Cards("", "", "", "")
 	if len(cs) != 1 {
 		t.Fatalf("cards after refused seed: %d", len(cs))
 	}
@@ -80,7 +80,7 @@ func TestSeedOnlyWhenEmpty(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("seed: %d", rec.Code)
 	}
-	cs, _ = db.Cards("", "", "")
+	cs, _ = db.Cards("", "", "", "")
 	if len(cs) != 58 {
 		t.Fatalf("cards after seed: %d", len(cs))
 	}

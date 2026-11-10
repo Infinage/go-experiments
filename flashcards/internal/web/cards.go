@@ -19,6 +19,7 @@ type cardsSignals struct {
 	Query     string  `json:"q"`
 	Category  string  `json:"category"`
 	Media     string  `json:"media"`
+	Status    string  `json:"status"`
 	DeleteIDs []int64 `json:"deleteIds"`
 }
 
@@ -28,6 +29,7 @@ type cardsData struct {
 	Query      string
 	Category   string
 	Media      string
+	Status     string
 	Categories []store.Category
 	// NoneCount backs the *None* pseudo-row: cards without a category.
 	NoneCount int
@@ -39,7 +41,8 @@ func (s *Server) cardsPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	d, err := s.cardsData(sig.Query, sig.Category, sig.Media)
+	d, err := s.cardsData(sig.Query, sig.Category, sig.Media,
+		status(sig.Status))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -56,8 +59,9 @@ func (s *Server) cardsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 // cardsData builds the list view model.
-func (s *Server) cardsData(q, category, media string) (*cardsData, error) {
-	cards, err := s.store.Cards(q, category, media)
+func (s *Server) cardsData(q, category, media,
+	status string) (*cardsData, error) {
+	cards, err := s.store.Cards(q, category, media, status)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +74,19 @@ func (s *Server) cardsData(q, category, media string) (*cardsData, error) {
 		return nil, err
 	}
 	return &cardsData{Cards: cards, Query: q, Category: cat(cats, category),
-		Media: media, Categories: cats, NoneCount: none}, nil
+		Media: media, Status: status, Categories: cats,
+		NoneCount: none}, nil
+}
+
+// status whitelists the review-state filter values a stray signal can set,
+// mirroring the store's cardStatusExpr labels.
+func status(v string) string {
+	switch v {
+	case "new", "learning", "mastered":
+		return v
+	default:
+		return ""
+	}
 }
 
 // cat passes the filter through only when it names a known category, so a
@@ -354,7 +370,8 @@ func (s *Server) deleteCards(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d, err := s.cardsData(sig.Query, sig.Category, sig.Media)
+	d, err := s.cardsData(sig.Query, sig.Category, sig.Media,
+		status(sig.Status))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

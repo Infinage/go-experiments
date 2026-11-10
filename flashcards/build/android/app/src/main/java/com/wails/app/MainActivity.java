@@ -26,17 +26,19 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
-import androidx.webkit.WebViewAssetLoader;
 
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -45,8 +47,8 @@ import java.util.List;
 
 /**
  * MainActivity hosts the WebView and manages the Wails application lifecycle.
- * It uses WebViewAssetLoader to serve assets from the Go library without
- * requiring a network server.
+ * It serves all WebView requests directly from the Go library via
+ * WailsBridge (no network server, no asset-loader indirection).
  */
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "WailsActivity";
@@ -61,11 +63,57 @@ public class MainActivity extends AppCompatActivity {
     // in the foreground (onStart) and torn down in onStop, so background battery/
     // network/screen broadcasts don't wake the app.
     private boolean systemReceiversRegistered = false;
-    private WebViewAssetLoader assetLoader;
 
     // The Go-side dialog ID of the in-flight file picker (-1 when idle)
     private int pendingFilePickerCallbackID = -1;
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+            @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == RECORD_AUDIO_PERMISSION_REQUEST
+                && pendingWebPermissionRequest != null) {
+            android.webkit.PermissionRequest webReq = pendingWebPermissionRequest;
+            pendingWebPermissionRequest = null;
+            // Grant only the resources whose app-level permission now exists;
+            // anything still missing is denied outright.
+            runOnUiThread(() -> {
+                ArrayList<String> granted = new ArrayList<>();
+                for (int i = 0; i < permissions.length; i++) {
+                    if (grantResults[i] == PackageManager.PERMISSION_GRANTED &&
+                            resOf(permissions[i]) != null) {
+                        granted.add(resOf(permissions[i]));
+                    }
+                }
+                if (granted.isEmpty()) {
+                    webReq.deny();
+                } else {
+                    webReq.grant(granted.toArray(new String[0]));
+                }
+            });
+        }
+    }
+
+    private static String resOf(String appPermission) {
+        if ("android.permission.RECORD_AUDIO".equals(appPermission)) {
+            return android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE;
+        }
+        if ("android.permission.CAMERA".equals(appPermission)) {
+            return android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE;
+        }
+        return null;
+    }
     private static final int PHOTO_CAPTURE_REQUEST = 7002;
+    private static final int RECORD_AUDIO_PERMISSION_REQUEST = 7011;
+    private static final int FILE_CHOOSER_REQUEST = 7004;
+    // In-flight <input type=file> chooser callback (HTML file pickers). The
+    // WebView's default WebChromeClient does nothing here, so inputs silently
+    // no-op — the chooser must be routed through a real Android intent.
+    private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
+    // WebView capture permission held while the app-level dialog for it runs;
+    // granted/denied when the dialog resolves. Null when no request in flight.
+    private android.webkit.PermissionRequest pendingWebPermissionRequest;
+    private String[] pendingAppPermissions;
     private static final int VIDEO_CAPTURE_REQUEST = 7003;
     private static final int CAMERA_PERMISSION_REQUEST = 7010;
     private File pendingCaptureFile;
@@ -116,11 +164,69 @@ public class MainActivity extends AppCompatActivity {
             WebView.setWebContentsDebuggingEnabled(true);
         }
 
-        // Set up asset loader for serving local assets
-        assetLoader = new WebViewAssetLoader.Builder()
-                .setDomain(WAILS_HOST)
-                .addPathHandler("/", new WailsPathHandler(bridge))
-                .build();
+        // Grant the WebView secure-origin access for mic/camera capture: the
+        // WebView permission check only fires when a WebChromeClient handles
+        // onPermissionRequest. Without it getUserMedia fails with NOT_ALLOWED
+        // even when RECORD_AUDIO is already granted to the app.
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                java.util.List<String> grantable = new ArrayList<>();
+                java.util.List<String> appPermissions = new ArrayList<>();
+                for (String res : request.getResources()) {
+                    String app = null;
+                    if (android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) {
+                        app = "android.permission.RECORD_AUDIO";
+                    } else if (android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(res)) {
+                        app = "android.permission.CAMERA";
+                    }
+                    if (app == null) continue;
+                    if (checkSelfPermission(app) == PackageManager.PERMISSION_GRANTED) {
+                        grantable.add(res);
+                    } else {
+                        appPermissions.add(app);
+                    }
+                }
+                if (!grantable.isEmpty()) {
+                    Log.d(TAG, "Granting WebView capture resources: " + grantable);
+                    request.grant(grantable.toArray(new String[0]));
+                    return;
+                }
+                if (appPermissions.isEmpty()) {
+                    request.deny();
+                    return;
+                }
+                // App-level permission missing: ask the user, and keep the
+                // WebView request alive so the FIRST getUserMedia resolves
+                // once the dialog succeeds (denying here would lose a tap: a
+                // retry only works granted-state exists afterwards).
+                pendingWebPermissionRequest = request;
+                pendingAppPermissions = appPermissions.toArray(new String[0]);
+                requestPermissions(pendingAppPermissions,
+                        RECORD_AUDIO_PERMISSION_REQUEST);
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView,
+                    android.webkit.ValueCallback<Uri[]> filePathCallback,
+                    FileChooserParams fileChooserParams) {
+                if (pendingFileChooserCallback != null) {
+                    // A second chooser while one is pending: cancel the old.
+                    pendingFileChooserCallback.onReceiveValue(null);
+                }
+                pendingFileChooserCallback = filePathCallback;
+                try {
+                    Intent intent = fileChooserParams.createIntent();
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
+                    return true;
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to launch file chooser", e);
+                    pendingFileChooserCallback = null;
+                    return false;
+                }
+            }
+        });
 
         // Set up WebView client to intercept requests
         webView.setWebViewClient(new WebViewClient() {
@@ -131,54 +237,18 @@ public class MainActivity extends AppCompatActivity {
                 if (request.getUrl().getHost() != null &&
                         request.getUrl().getHost().equals(WAILS_HOST)) {
 
-                    // For wails API calls (runtime, capabilities, etc.) pass the
-                    // full URL including the query string, because
-                    // WebViewAssetLoader.PathHandler strips query params
-                    String path = request.getUrl().getPath();
-                    if (path != null && path.startsWith("/wails/")) {
-                        String fullPath = path;
-                        String query = request.getUrl().getQuery();
-                        if (query != null && !query.isEmpty()) {
-                            fullPath = path + "?" + query;
-                        }
-                        if (DEBUG) Log.d(TAG, "Wails API call: " + fullPath);
-
-                        byte[] data = bridge.serveAsset(fullPath, request.getMethod(), "{}");
-                        if (data != null && data.length > 0) {
-                            java.io.InputStream inputStream = new java.io.ByteArrayInputStream(data);
-                            java.util.Map<String, String> headers = new java.util.HashMap<>();
-                            headers.put("Access-Control-Allow-Origin", "*");
-                            headers.put("Cache-Control", "no-cache");
-                            headers.put("Content-Type", "application/json");
-
-                            return new WebResourceResponse(
-                                "application/json",
-                                "UTF-8",
-                                200,
-                                "OK",
-                                headers,
-                                inputStream
-                            );
-                        }
-                        // Return error response if data is null
-                        return new WebResourceResponse(
-                            "application/json",
-                            "UTF-8",
-                            500,
-                            "Internal Error",
-                            new java.util.HashMap<>(),
-                            new java.io.ByteArrayInputStream("{}".getBytes())
-                        );
-                    }
-
                     // Stream captured photos/videos from the cache with HTTP Range
                     // support so <video> can seek/stream a clip of any length.
+                    String path = request.getUrl().getPath();
                     if (path != null && path.startsWith("/__capture__/")) {
                         return serveCaptureFile(path.substring("/__capture__/".length()), request);
                     }
 
-                    // For regular assets, use the asset loader
-                    return assetLoader.shouldInterceptRequest(request.getUrl());
+                    if (DEBUG && "POST".equals(request.getMethod())) {
+                        Log.d(TAG, "POST " + path
+                                + " ctype=" + request.getRequestHeaders().get("Content-Type"));
+                    }
+                    return serveAppAsset(path, request.getUrl().getQuery(), request.getMethod());
                 }
 
                 return super.shouldInterceptRequest(view, request);
@@ -197,6 +267,89 @@ public class MainActivity extends AppCompatActivity {
 
         // Add JavaScript interface for Go communication
         webView.addJavascriptInterface(new WailsJSBridge(bridge, webView), "wails");
+    }
+
+    /**
+     * Serve an application request through the Go bridge with full HTTP
+     * metadata. Unlike the WebViewAssetLoader path this keeps query strings
+     * (datastar signals) and real response Content-Type (e.g. text/event-stream),
+     * falling back to 500 bytes only if the native bridge fails.
+     */
+    @Nullable
+    private WebResourceResponse serveAppAsset(String path, String query, String method) {
+        if (path == null || path.isEmpty()) {
+            path = "/";
+        }
+        String fullPath = path;
+        if (query != null && !query.isEmpty()) {
+            fullPath = path + "?" + query;
+        }
+        if (DEBUG) Log.d(TAG, "App asset request: " + fullPath);
+
+        String envJson = bridge.serveAppAsset(fullPath, method);
+        if (envJson == null) {
+            return webResourceFromJson(
+                    "{\"status\":500,\"contentType\":\"text/plain\",\"body\":\"\"}",
+                    webView);
+        }
+        return webResourceFromJson(envJson, webView);
+    }
+
+    /**
+     * Convert {status, contentType, base64} JSON into a usable WebResourceResponse.
+     */
+    private static WebResourceResponse webResourceFromJson(String envJson,
+            WebView webView) {
+        try {
+            JSONObject response = new JSONObject(envJson);
+            String contentType = response.optString("contentType", "text/plain");
+            byte[] body = Base64.decode(response.optString("body", ""), Base64.DEFAULT);
+            int status = response.optInt("status", 200);
+            if (status >= 300 && status < 400) {
+                // WebResourceResponse rejects 3xx statuses outright
+                // (setStatusCodeAndReasonPhrase throws). Redirect responses
+                // only exist to change the page anyway, so drop the body and
+                // let the WebView perform a real navigation to the target;
+                // returning null makes the WebView follow the URL itself.
+                String location = response.optString("location", "");
+                if (DEBUG) Log.d(TAG, "Redirect " + status + " -> " + location
+                        + " by navigation");
+                webView.post(() -> {
+                    String target = (location == null || location.isEmpty())
+                            ? "/" : location;
+                    webView.loadUrl("https://" + WAILS_HOST + target);
+                });
+                return null;
+            }
+            int split = contentType.indexOf(';');
+            String mimeType = split >= 0 ? contentType.substring(0, split).trim() : contentType.trim();
+            String charset = split >= 0 ? contentType.substring(split + 1).trim() : null;
+            ByteArrayInputStream stream = new ByteArrayInputStream(body);
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Access-Control-Allow-Origin", "*");
+            headers.put("Cache-Control", "no-cache");
+            headers.put("Content-Type", contentType);
+            return new WebResourceResponse(mimeType, extractCharset(charset), status,
+                    status >= 400 ? "Error" : "OK", headers, stream);
+        } catch (Exception e) {
+            Log.e(TAG, "Bad asset envelope", e);
+            return null;
+        }
+    }
+
+    /**
+     * Pull a charset label out of an already-split Content-Type parameter
+     * section (null when absent).
+     */
+    private static String extractCharset(String params) {
+        if (params == null) return null;
+        String lower = params.toLowerCase(java.util.Locale.ROOT);
+        int idx = lower.indexOf("charset=");
+        if (idx < 0) return null;
+        String value = params.substring(idx + "charset=".length()).trim();
+        if (value.startsWith("\"")) value = value.substring(1);
+        if (value.endsWith("\"")) value = value.substring(0, value.length() - 1);
+        return value;
     }
 
     private void loadApplication() {
@@ -434,6 +587,26 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PHOTO_CAPTURE_REQUEST || requestCode == VIDEO_CAPTURE_REQUEST) {
             handleCaptureResult(resultCode, data);
+            return;
+        }
+        if (requestCode == FILE_CHOOSER_REQUEST) {
+            android.webkit.ValueCallback<Uri[]> callback = pendingFileChooserCallback;
+            pendingFileChooserCallback = null;
+            if (callback == null) {
+                return;
+            }
+            ArrayList<Uri> chosen = new ArrayList<>();
+            if (resultCode == RESULT_OK && data != null) {
+                if (data.getClipData() != null) {
+                    for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                        chosen.add(data.getClipData().getItemAt(i).getUri());
+                    }
+                } else if (data.getData() != null) {
+                    chosen.add(data.getData());
+                }
+            }
+            callback.onReceiveValue(chosen.isEmpty()
+                    ? new Uri[0] : chosen.toArray(new Uri[0]));
             return;
         }
         if (requestCode != FILE_PICKER_REQUEST) {

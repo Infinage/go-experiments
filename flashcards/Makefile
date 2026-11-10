@@ -1,9 +1,30 @@
-.PHONY: dev build build-pi test css apk apk-run apk-logs apk-go-log apk-push-db apk-clean
+# Flashcards linux dev build with optional Android APK bundle.
+#
+# Targets:
+#   dev            watch CSS (tailwind) + Go (air) with hot reload
+#   desktop        build the desktop (linux) binary
+#   css            compile tailwind classes once
+#   images         copy the local images/ dir into assets/
+#   run            build and run the desktop binary
+#   apk            build the Android APK (requires an installed Android SDK/NDK/JDK)
+#   keystore       generate a debug keystore for android release builds
+#   apk-keystore   build the release APK with the debug keystore (test-only signing)
+#   test           run go tests
+#   clean          remove build artifacts
+#
+# Credits: build/android/scripts/go-dev-setup.sh sets up any missing deps.
 
-# Task runner dependency — no global install required:
-#   Go 21+ and the repo's go.mod pin go-task, so `go run` resolves it locally
-#   (after the normal `go mod download` any Go build already needs).
-TASK := go run github.com/go-task/task/v3/cmd/task
+GO ?= go
+DESIGN_TOKENS ?= $(wildcard design_tokens.css)
+ifeq ($(strip $(DESIGN_TOKENS)),)
+	DESIGN_TOKENS_FLAG :=
+else
+	DESIGN_TOKENS_FLAG := --design-tokens $(DESIGN_TOKENS)
+endif
+
+.PHONY: all desktop dev watch-css watch-go css run apk keystore apk-keystore test clean
+
+all: desktop
 
 dev:
 	@$(MAKE) -j2 watch-css watch-go
@@ -17,32 +38,40 @@ watch-go:
 css:
 	tailwindcss -i assets/css/input.css -o assets/css/index.css
 
-build:
-	go build -o bin/flashcards .
+desktop:
+	$(GO) build -o flashcards .
 
-# Linux/arm64 binary for the Raspberry Pi (CGO off: pure-Go SQLite).
-build-pi:
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/flashcards-arm64 .
+run: desktop
+	./flashcards
+
+images:
+	git ls-files images | tar -cf - -T - | tar -xf - -C . 2>/dev/null || true
+	mkdir -p assets/images && cp -r images/. assets/images/ || true
 
 test:
-	go test ./...
+	$(GO) test ./...
 
-# ---------- Android (device build + install; requires toolchain setup, see README) ----------
+clean:
+	rm -f flashcards
+	rm -rf assets/images
 
-apk:
-	@$(TASK) apk:build
+keystore:
+	keytool -genkey -v -keystore build/android/debug.keystore \
+		-alias flashcards -keyalg RSA -keysize 2048 -validity 100000 \
+		-storepass android -keypass android \
+		-dname "CN=Flashcards,OU=Dev,O=Personal,L=Berlin,S=Berlin,C=DE"
 
-apk-run:
-	@$(TASK) apk:run:device
+# Android needs the same embed assets plus a debug signing config.
+apk: images
+	cd build/android && ./gradlew assembleDebug -PflashcardsRoot=$(PWD) \
+		-PflashcardsAssetsPath=$(PWD)/assets \
+		$(DESIGN_TOKENS_FLAG)
 
-apk-logs:
-	@$(TASK) apk:logs
-
-apk-go-log:
-	@$(TASK) apk:go-log
-
-apk-push-db:
-	@$(TASK) apk:push:db
-
-apk-clean:
-	@$(TASK) clean
+apk-keystore:
+	test -f build/android/debug.keystore || $(MAKE) keystore
+	cd build/android && ./gradlew assembleRelease -PflashcardsRoot=$(PWD) \
+		-PflashcardsAssetsPath=$(PWD)/assets \
+		-PflashcardsKeystore=build/android/debug.keystore \
+		-PflashcardsKeystorePassword=android \
+		-PflashcardsKeyAlias=flashcards \
+		$(DESIGN_TOKENS_FLAG)

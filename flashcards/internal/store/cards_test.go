@@ -62,7 +62,7 @@ func TestCardsFilters(t *testing.T) {
 		}
 	}
 	// Give one card an image so the media filter has something to match.
-	ids, _ := s.Cards("", "", "")
+	ids, _ := s.Cards("", "", "", "")
 	if err := s.SetImage(ids[0].ID, Media{Bytes: []byte("i"), Mime: "image/png"}); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestCardsFilters(t *testing.T) {
 		{"", "", "audio", 0},
 	}
 	for _, tc := range cases {
-		got, err := s.Cards(tc.q, tc.cat, tc.media)
+		got, err := s.Cards(tc.q, tc.cat, tc.media, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,12 +93,43 @@ func TestCardsFilters(t *testing.T) {
 	}
 }
 
+func TestCardsStatusFilter(t *testing.T) {
+	s := mustStore(t)
+	id, err := s.CreateCard("q", "a", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Never reviewed: matches "new" and plain listing only.
+	for _, tc := range []struct {
+		status string
+		want   int
+	}{
+		{"new", 1}, {"learning", 0}, {"mastered", 0}, {"", 1},
+		{"nonsense", 0},
+	} {
+		cs, err := s.Cards("", "", "", tc.status)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(cs) != tc.want {
+			t.Errorf("status %q: %d cards, want %d", tc.status, len(cs), tc.want)
+		}
+	}
+	s.Review(id, 2, time.Now()) // Good -> learning
+	if cs, _ := s.Cards("", "", "", "learning"); len(cs) != 1 || cs[0].Status != "learning" {
+		t.Fatalf("after review: %+v", cs)
+	}
+	if cs, _ := s.Cards("", "", "", "new"); len(cs) != 0 {
+		t.Fatalf("after review, new: %+v", cs)
+	}
+}
+
 func TestCardsOrderNewestFirst(t *testing.T) {
 	s := mustStore(t)
 	for i := range 3 {
 		s.CreateCard(string(rune('a'+i)), "", "")
 	}
-	cs, _ := s.Cards("", "", "")
+	cs, _ := s.Cards("", "", "", "")
 	if cs[0].Front != "c" || cs[2].Front != "a" {
 		t.Fatalf("order: %q %q %q", cs[0].Front, cs[1].Front, cs[2].Front)
 	}
@@ -114,7 +145,7 @@ func TestBulkDelete(t *testing.T) {
 	if err := s.DeleteCards(ids[:2]); err != nil {
 		t.Fatal(err)
 	}
-	cs, _ := s.Cards("", "", "")
+	cs, _ := s.Cards("", "", "", "")
 	if len(cs) != 1 {
 		t.Fatalf("left %d cards", len(cs))
 	}
@@ -139,12 +170,12 @@ func TestCategories(t *testing.T) {
 func TestCardStatus(t *testing.T) {
 	s := mustStore(t)
 	id, _ := s.CreateCard("q", "a", "")
-	cs, _ := s.Cards("", "", "")
+	cs, _ := s.Cards("", "", "", "")
 	if cs[0].Status != "new" {
 		t.Fatalf("new card status: %q", cs[0].Status)
 	}
 	s.Review(id, 2, time.Now()) // Good -> learning
-	cs, _ = s.Cards("", "", "")
+	cs, _ = s.Cards("", "", "", "")
 	if cs[0].Status != "learning" {
 		t.Fatalf("learning status: %q", cs[0].Status)
 	}

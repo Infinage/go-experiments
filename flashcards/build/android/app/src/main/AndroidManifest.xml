@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Internet permission for WebView -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- WebView and app run fully offline: no INTERNET permission. -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Observe network connectivity / type for android:NetworkChanged events -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -11,7 +10,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Hardware permissions actually used by this app: -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Chromium refuses to open the microphone device without BOTH: without
+         MODIFY_AUDIO_SETTINGS it logs "No audio device will be available for
+         recording" and getUserMedia fails NotReadableError ("mic busy"). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Image/audio pickers + WebView file chooser: SAF Hudson doesn't need
+         them, but Android < 13 falls back to direct ContentProvider/File
+         access, and some pickers resolve raw file paths. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 

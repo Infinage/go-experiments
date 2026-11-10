@@ -14,14 +14,18 @@ A retro-styled, single-user flashcard app with SM-2 spaced repetition.
   the counter shows "Card x of y", where y = remaining cards + already
   graded this pass, and therefore never shrinks from paging and always
   terminates
-- All cards view with search, media/category filters, bulk delete
+- All cards view with search, media/category/status filters, bulk delete
+- Card media can be captured in-app: live camera modal (webcam on desktop,
+  camera on Android) snaps straight into the form, and a mic recorder
+  records the audio front; on Android the WebView routes file choosers and
+  camera/mic permissions through the native bridge
 - Per-category "decks" progress; reset progress per category or all
 - Backup/export = copy the SQLite file
 
 ## Tech Stack
 
 Go, tailwind (v4 CLI), datastar (SSE), SQLite (`modernc.org/sqlite`,
-pure Go), html/template. Wails v3 is planned for desktop/mobile wrapping.
+pure Go), html/template. On Android the app runs inside a [Wails v3](https://github.com/wailsapp/wails) WebView (see the mobile section).
 
 ## Development
 
@@ -76,26 +80,23 @@ The app runs on Android as a [Wails v3](https://github.com/wailsapp/wails)
 WebView wrapping the same HTTP handler and SQLite store. The web build is
 unchanged (`make build`); Android uses these extra files:
 
-    Taskfile.yml, build/                 Android build orchestration (checked in)
+    build/                               Android gradle tree (checked in)
     main.go (android branch), main_android.go    WebView entrypoint + c-shared init
     internal/web/samplecards.go          shared sample deck (also feeds "Add sample cards")
     cmd/seeddb/                          writes a pre-seeded device database
-    Makefile apk targets                 thin wrappers for the task runner
+    Makefile apk targets                 the whole Android build, plain make + go + gradle
 
 ### Requirements
 
 - Go 21+, JDK 21+, `adb`
-- Android SDK with **NDK 26.3.11579264** (pinned) and platform 34
-- No Wails install needed to build: every build step is plain shell/Go
-  (gradle wrapper + `go build -buildmode=c-shared`), orchestrated by
-  [go-task](https://github.com/go-task/task), which is resolved from the
-  repo's own go.sum via `go run github.com/go-task/task/v3/cmd/task`
-  (see `tools.go`) — no global install.
+- Android SDK with **NDK 26.3.11579264** (pinned in the `Makefile` as
+  `NDK_VERSION`) and platform 34
+- No build runner, no Wails install: every build step is plain shell/Go
+  (gradle wrapper + `go build -buildmode=c-shared`), wired up in the
+  `Makefile`'s `apk` targets (go-task was removed — same recipes).
 
-The versions above are pinned in `build/android/Taskfile.yml`. A toolchain
-mismatch fails loudly **before** the build starts: every apk build's first
-step is the `preflight` task, which checks JDK ≥ 21, SDK/adb path, and the
-exact pinned NDK directory.
+A toolchain mismatch fails loudly **before** the build starts: `make apk`
+first checks for the java executable and the exact pinned NDK directory.
 
 ### Build & install (Wails-free)
 
@@ -108,8 +109,13 @@ Or with a device attached:
     make apk-push-db      # replace the device db with a sample deck  (SRC=<path>)
 
 Run `make test` first: the desktop web build and the Android build compile
-the same `internal/web` code (`go vet -tags android ./...` on the desktop
-verifies the Android split).
+the same `internal/web` code. To verify the Android split without the full
+APK, run the cgo vet check the `Makefile` build uses (needs the NDK clang
+for cross-compilation):
+
+    NDK=$HOME/Android/Sdk/ndk/26.3.11579264; CGO_ENABLED=1 GOOS=android GOARCH=arm64 \
+      CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang \
+      go vet -tags android ./...
 
 ### Mobile build provenance (fair warning for future maintainers)
 
@@ -120,14 +126,14 @@ edits being:
 
 - `com.wails.app` → `com.infinage.flashcards` in `gradle` (`applicationId`,
   NOT `namespace` — see below), `app_name` "Wails App" → "Flashcards",
-  and the `am start` FQCN in every Taskfile.
+  and the `am start` FQCN (now the `Makefile`'s `apk-run` target).
 - The Java sources stay in package `com.wails.app` on purpose: the Wails
   Go module hardcodes its JNI exports (`Java_com_wails_app_WailsBridge_*`,
   see `pkg/application/application_android.go` in the pinned module), so the
   bridge classes cannot be renamed without forking the module.
 - All desktop-only wails-init targets (darwin/windows/linux/docker) and
-  `build/config.yml`/icons are removed; the common Taskfile keeps only the
-  tasks the Android chain uses.
+  `build/config.yml`/icons are removed; the only orchestration left is the
+  `Makefile`'s `apk` targets (the wails-init Taskfiles were deleted).
 - The `wails3 android overlay:gen` step is replaced by the committed
   `main_android.go` (its generated equivalent), removing the last
   wails-CLI dependency from the build. Regenerating via wails is never
@@ -136,6 +142,9 @@ edits being:
 - `local.properties` (gradle SDK path) and all build outputs are
   gitignored; the gradle wrapper jar is committed, so any clone with the
   pinned toolchain builds reproducibly from scratch.
+- Launcher icons (`mipmap-*ic_launcher*.png`) are the app favicon
+  (`assets/static/icon.svg`) rasterised to all five densities; the stock
+  Wails "W" is gone.
 
 ### Device debugging
 

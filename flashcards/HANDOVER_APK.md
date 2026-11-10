@@ -5,7 +5,7 @@
 ## Where things stand
 
 - Web app (Go + datastar SSE + sqlite) is the single source of truth; the APK shell (Wails3 WebView) wraps the same handlers — `main.go` serves plain HTTP, `main_android.go` feeds the same `internal/web` into a Wails window under the `android` build tag.
-- Android build tree lives in `build/` (Taskfiles, gradle wrapper, manifest, native bridge sources). `main.go` / `main_android.go` entrypoints done. Icons placeholder尚未 replaced.
+- Android build tree lives in `build/` (gradle wrapper, manifest, native bridge sources); build orchestration is the root `Makefile`'s `apk` targets (go-task was removed — see README "Mobile build provenance"). `main.go` / `main_android.go` entrypoints done. Icons placeholder尚未 replaced.
 - Previous POC (now deleted from disk — its outputs live in git history of `mobile-wails-poc`) verified: APK installs, launches, WebView renders the app, sqlite opens on-device storage, seeding via adb works. Known issues found and fixed in POC — service-worker cache staleness (bump `assets/static/sw.js` VERSION on every asset change) and activity-launch flicker on cold start (double-launch guard in `MainActivity`, retained in `build/android/app/src/main/java`).
 - Desktop/web build remains the default: `make` / `air` for dev (`tmp/` gitignored), `bin/` outputs gitignored.
 
@@ -33,18 +33,17 @@
 ## Build/test commands
 
 ```sh
-task web:build            # regenerate web assets
-task debug:build          # build desktop/dev binary
-task web:dev              # run dev server (:8099)
-task debug:hot            # hot-reload dev
+make css              # regenerate web assets (tailwindcss)
+make build            # desktop/dev binary
+make dev              # dev server + css watch
 # APK:
-task web:build            # ensure assets fresh
-task android:build        # gradle assembleDebug via build/android/Taskfile
-# output: build/bin/flashcards-debug.apk
-adb install -r build/bin/flashcards-debug.apk
+make css              # edit assets? regenerate tarball-fresh css first
+make apk              # libwails.so (arm64) + gradle assembleDebug
+# output: bin/flashcards.apk
+make apk-run          # install -r + launch on the connected device
 ```
 
-(Exact task names live in root `Taskfile.yml` and `build/android/Taskfile.yml` — verify with `task --list` before documenting exact names in user-facing docs.)
+(Targets live in the root `Makefile`; device selection via `DEVICE_ID=<serial>`.)
 
 ## Known not-yet-automated checks
 

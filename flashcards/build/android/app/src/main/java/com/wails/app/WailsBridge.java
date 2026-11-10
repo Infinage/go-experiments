@@ -108,6 +108,8 @@ public class WailsBridge {
     private static native void nativeOnLowMemory();
     private static native void nativeOnPageFinished(String url);
     private static native byte[] nativeServeAsset(String path, String method, String headers);
+    private static native String nativeServeAssetFull(String pathWithQuery, String method);
+    private static native String nativeServeAssetBody(String payload);
     private static native String nativeHandleMessage(String message);
     private static native String nativeHandleRuntimeCall(String payload);
     private static native String nativeGetAssetMimeType(String path);
@@ -237,6 +239,54 @@ public class WailsBridge {
             return mimeType != null ? mimeType : "application/octet-stream";
         } catch (Exception e) {
             return "application/octet-stream";
+        }
+    }
+
+    /**
+     * Serve an app request from Go WITH real HTTP metadata.
+     *
+     * Wails' own nativeServeAsset buffers the response into a []byte and drops
+     * the headers, while the Java side guesses MIME from the file extension —
+     * extensionless routes (datastar SSE fragments, media) get
+     * application/octet-stream and datastar silently discards the body. It also
+     * strips the query string datastar signals ride on.
+     *
+     * This native call drives the same Go handler but returns a JSON envelope
+     * {status, contentType, body(B64), reason} built from Go's actual response,
+     * preserving query strings and true Content-Type.
+     */
+    public String serveAppAsset(String fullPathWithQuery, String method) {
+        if (!initialized) {
+            Log.w(TAG, "Bridge not initialized, cannot serve asset: " + fullPathWithQuery);
+            return null;
+        }
+        try {
+            return nativeServeAssetFull(fullPathWithQuery, method);
+        } catch (Exception e) {
+            Log.e(TAG, "Error serving asset: " + fullPathWithQuery, e);
+            return null;
+        }
+    }
+
+    /**
+     * Serve an app request WITH the request body. shouldInterceptRequest can
+     * never see a POST body (WebResourceRequest has no body accessor), so JS
+     * staging uploads route around the WebView network stack entirely:
+     * mediapick.js sends {path, contentType, bodyB64} through the JS bridge
+     * and Go drives the identical handler, reconstructing the request.
+     *
+     * Returns the same JSON envelope as serveAppAsset.
+     */
+    public String serveAppAssetBody(String payload) {
+        if (!initialized) {
+            Log.w(TAG, "Bridge not initialized, cannot serve asset body");
+            return null;
+        }
+        try {
+            return nativeServeAssetBody(payload);
+        } catch (Exception e) {
+            Log.e(TAG, "Error serving asset body", e);
+            return null;
         }
     }
 

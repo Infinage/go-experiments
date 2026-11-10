@@ -134,7 +134,7 @@ func TestNoneFilterFlows(t *testing.T) {
 		t.Fatalf("untagged = %d, want 1", n)
 	}
 
-	cs, err := s.Cards("", NoneFilter, "")
+	cs, err := s.Cards("", NoneFilter, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

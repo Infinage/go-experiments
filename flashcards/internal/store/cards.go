@@ -75,7 +75,7 @@ func (s *Store) Card(id int64) (Card, error) {
 // type ("any", "text", "image", "audio") and a substring match on
 // front/back text. Empty values mean no filter. Each card carries its
 // review status.
-func (s *Store) Cards(q, category, media string) ([]Card, error) {
+func (s *Store) Cards(q, category, media, status string) ([]Card, error) {
 	where, args := []string{"1=1"}, []any{}
 	catExpr, catArg := "category = ?", category
 	if category == NoneFilter {
@@ -100,6 +100,12 @@ func (s *Store) Cards(q, category, media string) ([]Card, error) {
 		where = append(where, "front_image IS NOT NULL")
 	case "audio":
 		where = append(where, "front_audio IS NOT NULL")
+	}
+	if status != "" {
+		// Status reuses the same interval→label mapping the list itself
+		// renders, so the filter always agrees with what's shown.
+		where = append(where, "("+cardStatusExpr+") = ?")
+		args = append(args, status)
 	}
 	rows, err := s.db.Query(`SELECT `+cardCols+`, `+cardStatusExpr+`
 		FROM cards

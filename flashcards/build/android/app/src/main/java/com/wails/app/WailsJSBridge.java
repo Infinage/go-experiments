@@ -42,6 +42,17 @@ public class WailsJSBridge {
     }
 
     /**
+     * Serve an app request WITH the request body (staging uploads).
+     * Called from JavaScript: wails.serveAppAssetWithBody(JSON string)
+     * Payload: {"path":"/cards/media/stage","contentType":"multipart/form-data; boundary=x","bodyB64":"..."}
+     * Returns Go's JSON response envelope {status, contentType, body(B64), reason, location}.
+     */
+    @JavascriptInterface
+    public String serveAppAssetWithBody(String payload) {
+        return bridge.serveAppAssetBody(payload);
+    }
+
+    /**
      * Send a message to Go asynchronously.
      * The response will be sent back via a callback.
      * Called from JavaScript: wails.invokeAsync(callbackId, message)
