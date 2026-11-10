@@ -2,28 +2,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- WebView and app run fully offline: no INTERNET permission. -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Observe network connectivity / type for android:NetworkChanged events -->
+    <!-- Minimal set: everything below is actually used. There is no
+         INTERNET permission by design — the app is fully offline and the
+         webview talks to the Go handlers through the asset bridge. -->
+    <!-- Wails runtime registers a default network callback at startup
+         unconditionally; dropping this crashes the app on boot. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Hardware permissions actually used by this app: -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Chromium refuses to open the microphone device without BOTH: without
          MODIFY_AUDIO_SETTINGS it logs "No audio device will be available for
          recording" and getUserMedia fails NotReadableError ("mic busy"). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- androidx.biometric (pulled in by stock wails plumbing we never
+         call) tries to merge these back in; strip them again. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
     <!-- Image/audio pickers + WebView file chooser: SAF Hudson doesn't need
          them, but Android < 13 falls back to direct ContentProvider/File
          access, and some pickers resolve raw file paths. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <queries>
         <intent>
