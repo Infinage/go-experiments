@@ -11,11 +11,20 @@
 // Buttons marked data-camera-target="#<input-id>" control the modal.
 // The snapped frame is pushed into that file input as a File, so the
 // normal change handler and form upload paths keep working.
+//
+// If the machine exposes more than one camera (phones have front +
+// rear), after the grant the modal enumerates the video inputs and shows
+// a data-camera-switch button cycling through them. Mirroring follows
+// the active camera: front-facing previews snap mirrored (selfie view),
+// rear/unknown cameras snap what the lens sees.
 (() => {
   "use strict";
 
   let stream = null;
   let targetInput = null;
+  let devices = [];      // videoinput MediaDeviceInfos, after grant
+  let deviceIdx = -1;    // index of the active camera in devices
+  let mirrored = true;   // front-facing default
 
   function shot() {
     const el = document.getElementById("camera-video");
@@ -23,10 +32,12 @@
     c.width = el.videoWidth;
     c.height = el.videoHeight;
     const ctx = c.getContext("2d");
-    // The preview is mirrored (-scale-x-100 like a selfie view); snap the
-    // same mirrored frame so the photo matches what was on screen.
-    ctx.translate(c.width, 0);
-    ctx.scale(-1, 1);
+    // The preview is mirrored like a selfie when the active camera is
+    // front-facing; snap the same frame the user saw.
+    if (mirrored) {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(el, 0, 0);
     c.toBlob((blob) => {
       if (blob) {
@@ -43,8 +54,43 @@
     if (stream) stream.getTracks().forEach((t) => t.stop());
     stream = null;
     targetInput = null;
+    devices = [];
+    deviceIdx = -1;
+    mirrored = true;
     document.getElementById("camera-video").srcObject = null;
     document.getElementById("camera-modal").style.display = "none";
+  }
+
+  function setMirrored(on) {
+    mirrored = !!on;
+    document.getElementById("camera-video").classList
+      .toggle("-scale-x-100", mirrored);
+  }
+
+  // Track facingMode is implementation-quiet: Chromium reports a string
+  // or list per getCapabilities(), other engines may omit it. Unknown
+  // cameras keep the front-facing (mirrored) default.
+  function trackFacing(track) {
+    const f = track.getCapabilities?.().facingMode;
+    const facing = Array.isArray(f) ? f[0] : f;
+    return facing === "environment" ? "environment" : "user";
+  }
+
+  function attach(s) {
+    stream = s;
+    const track = s.getVideoTracks()[0];
+    setMirrored(trackFacing(track) === "user");
+    const settings = track.getSettings();
+    deviceIdx = devices
+      .findIndex((d) => d.deviceId === settings.deviceId);
+    const el = document.getElementById("camera-video");
+    el.srcObject = stream;
+    document.getElementById("camera-switch").classList
+      .toggle("hidden", devices.length < 2);
+    document.getElementById("camera-modal").style.display = "flex";
+    el.play().catch(() => {
+      // Live preview without sound always autoplays.
+    });
   }
 
   // Media-kind switches must close any open camera preview.
@@ -65,13 +111,33 @@
       input.click();
       return;
     }
-    const el = document.getElementById("camera-video");
-    el.srcObject = stream;
-    document.getElementById("camera-modal").style.display = "flex";
+    // Labels are only filled in after a live grant; enumerate now so the
+    // switch button can cycle by deviceId from the first switch on.
     try {
-      await el.play();
+      const all = await navigator.mediaDevices.enumerateDevices();
+      devices = all.filter((d) => d.kind === "videoinput");
     } catch {
-      // Playback without sound always autoplays; ignore defensively.
+      devices = []; // switch stays hidden; single-camera behaviour
+    }
+    attach(stream);
+  }
+
+  // Cycle to the next video input. Re-prompts on desktops whose second
+  // camera was never granted; on failure keep showing the old stream.
+  async function switchCamera() {
+    if (devices.length < 2 || deviceIdx < -1) return;
+    const next = devices[(deviceIdx + 1) % devices.length];
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: next.deviceId } },
+        audio: false,
+      });
+      stream.getTracks().forEach((t) => t.stop());
+      attach(s);
+    } catch {
+      const btn = document.getElementById("camera-switch");
+      btn.textContent = "Switch failed";
+      setTimeout(() => { btn.textContent = "Switch camera"; }, 1200);
     }
   }
 
@@ -102,6 +168,7 @@
     }
     if (evt.target.closest("[data-camera-snap]")) shot();
     if (evt.target.closest("[data-camera-close]")) close();
+    if (evt.target.closest("[data-camera-switch]")) switchCamera();
   });
 
   // Replay any clicks that happened before real handlers existed.

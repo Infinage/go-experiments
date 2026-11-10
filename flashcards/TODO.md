@@ -25,6 +25,13 @@ commits as they land; strike through when done.
 
 ## Done this session (moved down here to keep the open list short)
 
+- [x] Camera switch (m01404): camera.js enumerates videoinput devices
+      after the permission grant and shows a hidden #camera-switch
+      (card_form.html modal row) cycling by exact deviceId; mirroring now
+      follows the active track's getCapabilities().facingMode (front =
+      selfie-mirror preview + mirrored snap, rear = unmirrored); switch
+      failure keeps the old stream and flashes "Switch failed" for 1.2s.
+      Single-camera desktops never see the button.
 - [x] Status filter in all-cards view (m01312): cardsSignals/cardsData
       gain Status; server whitelists new/learning/mastered (web.cards
       status()); store.Cards takes a 4th arg filtered by cardStatusExpr
