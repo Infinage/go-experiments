@@ -37,7 +37,8 @@
         {{end}}
         {{if .LiveMedia}}
           <img
-            class="shrink-0 max-h-[38%] rounded-xl border-2 border-ink"
+            class="flex-1 min-h-0 w-full object-contain rounded-xl
+                   border-2 border-ink"
             alt="Card front image"
             data-attr:src="$imgUrl"
             data-show="$imgUrl"
@@ -54,7 +55,8 @@
         {{else}}
           {{if .ImageURL}}
             <img
-              class="shrink-0 max-h-[38%] rounded-xl border-2 border-ink"
+              class="flex-1 min-h-0 w-full object-contain rounded-xl
+                     border-2 border-ink"
               alt="Card front image"
               src="{{.ImageURL}}"
             >
@@ -69,12 +71,12 @@
           {{end}}
         {{end}}
         <div
-          class="flex-1 min-h-0 w-full flex items-center justify-center
-                 overflow-hidden"
+          class="shrink-0 w-full flex items-center justify-center"
         >
           <h1
             class="m-0 font-semibold leading-tight whitespace-pre-line w-full"
             data-fit
+            data-fit-lines="2"
             data-fit-min="14"
             {{if eq .Size "h-64"}}data-fit-max="24"
             {{else}}data-fit-max="52"
@@ -83,6 +85,12 @@
             {{end}}
           >{{.Front}}</h1>
         </div>
+        {{- /* Shown by fittext.js only when the front text can't stay
+             within two lines: opens the shared full-text modal. */}}
+        <button
+          class="fit-expand btn bg-white text-xs hidden"
+          type="button"
+        >Read full text ↓</button>
         {{if .TapHint}}
           <span
             class="text-[13px]"
