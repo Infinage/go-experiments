@@ -451,18 +451,14 @@
           data-camera-snap
           type="button"
         >Snap photo</button>
-        {{- /* Hidden until camera.js enumerates a second video input. */}}
+        {{- /* Hidden until camera.js enumerates a second video input; the
+             header Close is the only dismiss control. */}}
         <button
           id="camera-switch"
-          class="btn bg-white min-h-11 hidden"
+          class="btn bg-white flex-[2] min-h-11 hidden"
           data-camera-switch
           type="button"
         >Switch camera</button>
-        <button
-          class="btn bg-white min-h-11"
-          data-camera-close
-          type="button"
-        >Cancel</button>
       </div>
     </div>
   </div>
