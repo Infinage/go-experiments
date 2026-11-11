@@ -60,7 +60,8 @@ subcommands:
 
 examples:
   extract vid -ip 192.168.1.10 -channels 1,3 \
-    -start "2026-11-11 05:00:00" -end "2026-11-11 05:10:00"
+    -start "2026-11-11 05:00:00" -end "2026-11-11 05:10:00" \
+    -out clips1
 
   extract shots -ip 192.168.1.10 -channels 1,3 \
     -start "2026-11-11 05:00:00" -end "2026-11-11 05:10:00" \
@@ -198,50 +199,64 @@ func (c *barCursor) status(line string) {
 	c.statuses++
 }
 
+// progress drives one aggregate bar line, with per-channel status lines
+// accumulating below it as channels complete. The caller owns the state the
+// render function reads; update and complete serialize mutations with render.
+type progress struct {
+	cur    barCursor
+	mu     sync.Mutex
+	render func() string
+}
+
+// update mutates the state (under the lock) and repaints the bar.
+func (p *progress) update(mutate func()) {
+	p.mu.Lock()
+	mutate()
+	line := p.render()
+	p.mu.Unlock()
+	p.cur.paint(line)
+}
+
+// complete mutates the state, repaints the bar, then appends the channel's
+// result line below it.
+func (p *progress) complete(mutate func(), status string) {
+	p.update(mutate)
+	p.cur.status(status)
+}
+
 // --- vid subcommand ---------------------------------------------------------
 
 // vidProgress drives the single aggregate bar: channels run in parallel over
 // the same window, so the bar shows the average progress across channels.
 type vidProgress struct {
-	cur      barCursor
-	mu       sync.Mutex
-	progress []float64
-	total    time.Duration
+	bar        progress
+	progresses []float64
+	total      time.Duration
 }
 
 func newVidProgress(n int, total time.Duration) *vidProgress {
-	return &vidProgress{progress: make([]float64, n), total: total}
+	v := &vidProgress{progresses: make([]float64, n), total: total}
+	v.bar.render = v.barLine
+	return v
 }
 
 func (v *vidProgress) setProgress(idx int, p float64) {
-	v.mu.Lock()
-	v.progress[idx] = p
-	_, line := v.barLine()
-	v.mu.Unlock()
-	v.cur.paint(line)
+	v.bar.update(func() { v.progresses[idx] = p })
 }
 
-// complete finalizes the channel at 100%, repaints the bar, then appends the
-// channel's result line below it.
 func (v *vidProgress) complete(idx int, status string) {
-	v.mu.Lock()
-	v.progress[idx] = 1
-	_, line := v.barLine()
-	v.mu.Unlock()
-	v.cur.paint(line)
-	v.cur.status(status)
+	v.bar.complete(func() { v.progresses[idx] = 1 }, status)
 }
 
-func (v *vidProgress) barLine() (float64, string) {
+func (v *vidProgress) barLine() string {
 	avg := 0.0
-	for _, p := range v.progress {
+	for _, p := range v.progresses {
 		avg += p
 	}
-	avg /= float64(len(v.progress))
+	avg /= float64(len(v.progresses))
 	pos := time.Duration(avg * float64(v.total))
-	line := fmt.Sprintf("%dch %s %3.0f%%  %s / %s  remaining %s",
-		len(v.progress), bar(avg), avg*100, durationStr(pos), durationStr(v.total), durationStr(v.total-pos))
-	return avg, line
+	return fmt.Sprintf("%dch %s %3.0f%%  %s / %s  remaining %s",
+		len(v.progresses), bar(avg), avg*100, durationStr(pos), durationStr(v.total), durationStr(v.total-pos))
 }
 
 // --- shots subcommand -------------------------------------------------------
@@ -249,42 +264,28 @@ func (v *vidProgress) barLine() (float64, string) {
 // shotsProgress drives the single aggregate bar for shots: progress is shots
 // completed across all channels; failed shots are counted and shown live.
 type shotsProgress struct {
-	cur        barCursor
-	mu         sync.Mutex
+	bar        progress
 	done       []int
 	failed     []int
 	perChannel int
 }
 
 func newShotsProgress(n, perChannel int) *shotsProgress {
-	return &shotsProgress{done: make([]int, n), failed: make([]int, n), perChannel: perChannel}
+	s := &shotsProgress{done: make([]int, n), failed: make([]int, n), perChannel: perChannel}
+	s.bar.render = s.barLine
+	return s
 }
 
 func (s *shotsProgress) shotDone(idx int) {
-	s.mu.Lock()
-	s.done[idx]++
-	line := s.barLine()
-	s.mu.Unlock()
-	s.cur.paint(line)
+	s.bar.update(func() { s.done[idx]++ })
 }
 
 func (s *shotsProgress) shotFailed(idx int) {
-	s.mu.Lock()
-	s.failed[idx]++
-	line := s.barLine()
-	s.mu.Unlock()
-	s.cur.paint(line)
+	s.bar.update(func() { s.failed[idx]++ })
 }
 
-// complete finalizes the channel at 100%, repaints the bar, then appends the
-// channel's result line below it.
 func (s *shotsProgress) complete(idx int, status string) {
-	s.mu.Lock()
-	s.done[idx] = s.perChannel
-	line := s.barLine()
-	s.mu.Unlock()
-	s.cur.paint(line)
-	s.cur.status(status)
+	s.bar.complete(func() { s.done[idx] = s.perChannel }, status)
 }
 
 func (s *shotsProgress) barLine() string {
@@ -311,26 +312,22 @@ func runVid(args []string) {
 	channels := fs.String("channels", "", "comma-separated channel numbers, e.g. 1,3,4")
 	startRaw := fs.String("start", "", "recording start time")
 	endRaw := fs.String("end", "", "recording end time")
+	out := fs.String("out", "", "output file name without extension (per channel: <name>_chN.mp4)")
 	fs.Parse(args)
 
 	user, pass := resolveConn(ip)
 	start, end, chans := resolveWindow(startRaw, endRaw, channels)
 
-	baseName := promptVisible("output file name (without extension): ")
-	baseName = strings.TrimSpace(baseName)
+	baseName := strings.TrimSpace(*out)
+	if baseName == "" {
+		baseName = promptVisible("output file name (without extension): ")
+	}
 	if baseName == "" {
 		fmt.Fprintln(os.Stderr, "output file name must not be empty")
 		os.Exit(1)
 	}
 	for _, ch := range chans {
-		out := fmt.Sprintf("%s_ch%d.mp4", baseName, ch)
-		if _, err := os.Stat(out); err == nil {
-			fmt.Fprintf(os.Stderr, "output file %s already exists; remove it or choose another name\n", out)
-			os.Exit(1)
-		} else if !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "checking output file %s: %v\n", out, err)
-			os.Exit(1)
-		}
+		requireAbsent("output file", fmt.Sprintf("%s_ch%d.mp4", baseName, ch))
 	}
 
 	startStr := start.Format(dahuaTime)
@@ -341,41 +338,30 @@ func runVid(args []string) {
 		len(chans), *ip, startStr, endStr, durationStr(total))
 
 	r := newVidProgress(len(chans), total)
-	var wg sync.WaitGroup
-	failed := make([]int, 0, len(chans))
-	var failMu sync.Mutex
-
-	for i, ch := range chans {
-		wg.Add(1)
-		go func(idx, ch int) {
-			defer wg.Done()
-			out := fmt.Sprintf("%s_ch%d.mp4", baseName, ch)
-			err := extractChannel(user, pass, *ip, ch, startStr, endStr, out, total,
-				func(progress float64) {
-					r.setProgress(idx, progress)
-				})
-			var stall *streamStall
-			if errors.As(err, &stall) && stall.pos > 0 {
-				// Stream ended early because the recording data ends before the
-				// window does (or a gap was crossed). The mp4 is finalized.
-				r.complete(idx, fmt.Sprintf("ch%d done (recording data ends at %s; no data for %v after that) -> %s",
-					ch, durationStr(stall.pos), stallTimeout, out))
-			} else if errors.As(err, &stall) {
-				r.complete(idx, fmt.Sprintf("ch%d FAILED: no data received (no recording in this window?)", ch))
-				failMu.Lock()
-				failed = append(failed, ch)
-				failMu.Unlock()
-			} else if err != nil {
-				r.complete(idx, fmt.Sprintf("ch%d FAILED: %v", ch, err))
-				failMu.Lock()
-				failed = append(failed, ch)
-				failMu.Unlock()
-			} else {
-				r.complete(idx, fmt.Sprintf("ch%d done -> %s", ch, out))
-			}
-		}(i, ch)
-	}
-	wg.Wait()
+	failed := runChannels(chans, func(idx, ch int) bool {
+		out := fmt.Sprintf("%s_ch%d.mp4", baseName, ch)
+		err := extractChannel(user, pass, *ip, ch, startStr, endStr, out, total,
+			func(progress float64) {
+				r.setProgress(idx, progress)
+			})
+		var stall *streamStall
+		switch {
+		case errors.As(err, &stall) && stall.pos > 0:
+			// Stream ended early because the recording data ends before the
+			// window does (or a gap was crossed). The mp4 is finalized.
+			r.complete(idx, fmt.Sprintf("ch%d done (recording data ends at %s; no data for %v after that) -> %s",
+				ch, durationStr(stall.pos), stallTimeout, out))
+			return true
+		case errors.As(err, &stall):
+			r.complete(idx, fmt.Sprintf("ch%d FAILED: no data received (no recording in this window?)", ch))
+			return false
+		case err != nil:
+			r.complete(idx, fmt.Sprintf("ch%d FAILED: %v", ch, err))
+			return false
+		}
+		r.complete(idx, fmt.Sprintf("ch%d done -> %s", ch, out))
+		return true
+	})
 	fmt.Println()
 
 	if len(failed) > 0 {
@@ -447,28 +433,26 @@ func runFFmpegWithProgress(cmd *exec.Cmd, total time.Duration, fn func(float64))
 	go func() {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
-		deadline := time.Time{}
+		var deadline time.Time
 		for {
 			select {
 			case <-done:
 				return
 			case <-t.C:
 				mu.Lock()
-				idle := time.Since(lastChange)
 				switch {
-				case idle >= stallTimeout && !signalled:
+				case !signalled && time.Since(lastChange) >= stallTimeout:
 					signalled = true
 					deadline = time.Now().Add(3 * time.Second)
 					mu.Unlock()
 					cmd.Process.Signal(os.Interrupt) // graceful: finalizes the mp4
-					continue
-				case signalled && !killed && !deadline.IsZero() && time.Now().After(deadline):
+				case signalled && !killed && time.Now().After(deadline):
 					killed = true
 					mu.Unlock()
 					cmd.Process.Kill()
-					continue
+				default:
+					mu.Unlock()
 				}
-				mu.Unlock()
 			}
 		}
 	}()
@@ -521,13 +505,7 @@ func runFFmpegWithProgress(cmd *exec.Cmd, total time.Duration, fn func(float64))
 		return &streamStall{pos: pos}
 	}
 	if err != nil {
-		const max = 300
-		if len(msg) > max {
-			msg = msg[len(msg)-max:]
-		}
-		// Keep the failure single-line: it is printed under the progress bar.
-		msg = strings.ReplaceAll(msg, "\n", " | ")
-		return fmt.Errorf("%v: %s", err, msg)
+		return tailErr(err, msg)
 	}
 	if !sawProgress {
 		// ffmpeg exited cleanly but never got a single packet: the window has
@@ -606,13 +584,7 @@ func runShots(args []string) {
 		fmt.Fprintln(os.Stderr, "output directory must not be empty")
 		os.Exit(1)
 	}
-	if _, err := os.Stat(outDir); err == nil {
-		fmt.Fprintf(os.Stderr, "output directory %s already exists; remove it or choose another name\n", outDir)
-		os.Exit(1)
-	} else if !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "checking output directory: %v\n", err)
-		os.Exit(1)
-	}
+	requireAbsent("output directory", outDir)
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "creating output directory: %v\n", err)
 		os.Exit(1)
@@ -622,38 +594,27 @@ func runShots(args []string) {
 		len(times), mode, *ip, start.Format(dahuaTime), end.Format(dahuaTime), outDir)
 
 	s := newShotsProgress(len(chans), len(times))
-	var wg sync.WaitGroup
-	failedChans := make([]int, 0, len(chans))
-	var failMu sync.Mutex
-
-	for i, ch := range chans {
-		wg.Add(1)
-		go func(idx, ch int) {
-			defer wg.Done()
-			failed := 0
-			var lastFail time.Time
-			for j, t := range times {
-				outFile := filepath.Join(outDir, fmt.Sprintf("ch%d_%04d.jpg", ch, j+1))
-				if err := grabShot(user, pass, *ip, ch, t, outFile); err != nil {
-					failed++
-					lastFail = t
-					s.shotFailed(idx)
-					continue
-				}
-				s.shotDone(idx)
+	failedChans := runChannels(chans, func(idx, ch int) bool {
+		failed := 0
+		var lastFail time.Time
+		for j, t := range times {
+			outFile := filepath.Join(outDir, fmt.Sprintf("ch%d_%04d.jpg", ch, j+1))
+			if err := grabShot(user, pass, *ip, ch, t, outFile); err != nil {
+				failed++
+				lastFail = t
+				s.shotFailed(idx)
+				continue
 			}
-			if failed > 0 {
-				s.complete(idx, fmt.Sprintf("ch%d done with %d/%d failed shot(s), last at %s -> %s",
-					ch, failed, len(times), lastFail.Format(dahuaTime), outDir))
-				failMu.Lock()
-				failedChans = append(failedChans, ch)
-				failMu.Unlock()
-			} else {
-				s.complete(idx, fmt.Sprintf("ch%d done -> %s", ch, outDir))
-			}
-		}(i, ch)
-	}
-	wg.Wait()
+			s.shotDone(idx)
+		}
+		if failed > 0 {
+			s.complete(idx, fmt.Sprintf("ch%d done with %d/%d failed shot(s), last at %s -> %s",
+				ch, failed, len(times), lastFail.Format(dahuaTime), outDir))
+			return false
+		}
+		s.complete(idx, fmt.Sprintf("ch%d done -> %s", ch, outDir))
+		return true
+	})
 	fmt.Println()
 
 	if len(failedChans) > 0 {
@@ -690,17 +651,58 @@ func grabShot(user, pass, ip string, ch int, t time.Time, outFile string) error 
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("timed out after %s (XVR not reachable or no data sent)", shotTimeout)
 		}
-		msg := strings.TrimSpace(stderr.String())
-		const max = 300
-		if len(msg) > max {
-			msg = msg[len(msg)-max:]
-		}
-		return fmt.Errorf("%v: %s", err, msg)
+		return tailErr(err, stderr.String())
 	}
 	return nil
 }
 
 // --- shared helpers ---------------------------------------------------------
+
+// runChannels runs fn for each channel in a parallel goroutine and waits for
+// all of them. fn prints its own per-channel status and reports whether the
+// channel succeeded; the failed channel numbers are returned.
+func runChannels(chans []int, fn func(idx, ch int) bool) []int {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var failed []int
+	for i, ch := range chans {
+		wg.Add(1)
+		go func(idx, ch int) {
+			defer wg.Done()
+			if !fn(idx, ch) {
+				mu.Lock()
+				failed = append(failed, ch)
+				mu.Unlock()
+			}
+		}(i, ch)
+	}
+	wg.Wait()
+	return failed
+}
+
+// requireAbsent exits if path exists (or its existence cannot be checked).
+func requireAbsent(kind, path string) {
+	_, err := os.Stat(path)
+	if err == nil {
+		fmt.Fprintf(os.Stderr, "%s %s already exists; remove it or choose another name\n", kind, path)
+		os.Exit(1)
+	}
+	if !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "checking %s %s: %v\n", kind, path, err)
+		os.Exit(1)
+	}
+}
+
+// tailErr returns err annotated with the last 300 bytes of msg, flattened to
+// a single line (it is printed under the progress bar).
+func tailErr(err error, msg string) error {
+	msg = strings.TrimSpace(msg)
+	const max = 300
+	if len(msg) > max {
+		msg = msg[len(msg)-max:]
+	}
+	return fmt.Errorf("%v: %s", err, strings.ReplaceAll(msg, "\n", " | "))
+}
 
 func bar(progress float64) string {
 	filled := int(progress * float64(barWidth))
@@ -748,12 +750,15 @@ func parseChannels(raw string) ([]int, error) {
 	return out, nil
 }
 
+// stdinScanner is shared by all prompts: creating a new Scanner per prompt
+// can over-read the input buffer and swallow lines meant for the next prompt.
+var stdinScanner = bufio.NewScanner(os.Stdin)
+
 // promptVisible reads a normal echoed line.
 func promptVisible(label string) string {
 	fmt.Print(label)
-	sc := bufio.NewScanner(os.Stdin)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
+	for stdinScanner.Scan() {
+		line := strings.TrimSpace(stdinScanner.Text())
 		if line != "" {
 			return line
 		}
@@ -779,10 +784,9 @@ func promptHidden(label string) string {
 	}
 	fmt.Println()
 
-	sc := bufio.NewScanner(os.Stdin)
 	var line string
-	if sc.Scan() {
-		line = strings.TrimSpace(sc.Text())
+	if stdinScanner.Scan() {
+		line = strings.TrimSpace(stdinScanner.Text())
 	}
 	sttyEchoOn.Run()
 	if line == "" {
