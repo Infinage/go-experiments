@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- $(go env GOROOT)/lib/wasm/wasm_exec.js -->
+  <!-- $TINYGOPATH/targets/wasm_exec.js -->
+  <!-- This one fetched from root folder -->
+  <script src="/wasm_exec.js"></script>
+
+  <!-- Init the compiled WebAssembly -->
+  <script>
+    // main.wasm fetched from current directory (note absence of '/' in fetch path)
+    const go = new Go();
+    WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+      .then(result => go.run(result.instance))
+  </script>
+</head>
+<body></body>
+</html>
