@@ -1,0 +1,28 @@
+{{define "Home"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Infinite Math</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/assets/css/index.css">
+  <script src="/assets/js/index.js" type="module" defer></script>
+</head>
+<body>
+  <div class="problems">
+    {{range .}}
+      {{template "Problem" .}}
+    {{end}}
+  </div>
+</body>
+</html>
+{{end}}
+
+{{define "Problem"}}
+<div class="problem" data-iteration="{{if .Iteration}}{{.Iteration}}{{else}}2{{end}}">
+  <span class="n1">{{.N1}}</span>
+  <span class="n2">{{.N2}}</span>
+  <span class="operator">+</span>
+  <input placeholder="0" inputmode="numeric" data-answer="{{.Answer}}" />
+</div>  
+{{end}}
